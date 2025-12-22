@@ -148,21 +148,21 @@
         <div class="summary-grid">
           <div class="summary-item" style="background: #667eea; font-size: 0.9rem;">
             <h4>Alquiler Total</h4>
-            <div class="amount">S/ {{ (registro.ingresos.alquiler.efectivo + registro.ingresos.alquiler.yape).toFixed(2) }}</div>
-            <small style="opacity: 0.8;">Efectivo: S/ {{ registro.ingresos.alquiler.efectivo.toFixed(2) }} | Yape: S/ {{ registro.ingresos.alquiler.yape.toFixed(2) }}</small>
+            <div class="amount">S/ {{ formatearDecimal(formatearNumero(registro.ingresos.alquiler.efectivo) + formatearNumero(registro.ingresos.alquiler.yape)) }}</div>
+            <small style="opacity: 0.8;">Efectivo: S/ {{ formatearDecimal(registro.ingresos.alquiler.efectivo) }} | Yape: S/ {{ formatearDecimal(registro.ingresos.alquiler.yape) }}</small>
           </div>
           <div class="summary-item" style="background: #764ba2; font-size: 0.9rem;">
             <h4>Consumo Total</h4>
-            <div class="amount">S/ {{ (registro.ingresos.consumo.efectivo + registro.ingresos.consumo.yape).toFixed(2) }}</div>
-            <small style="opacity: 0.8;">Efectivo: S/ {{ registro.ingresos.consumo.efectivo.toFixed(2) }} | Yape: S/ {{ registro.ingresos.consumo.yape.toFixed(2) }}</small>
+            <div class="amount">S/ {{ formatearDecimal(formatearNumero(registro.ingresos.consumo.efectivo) + formatearNumero(registro.ingresos.consumo.yape)) }}</div>
+            <small style="opacity: 0.8;">Efectivo: S/ {{ formatearDecimal(registro.ingresos.consumo.efectivo) }} | Yape: S/ {{ formatearDecimal(registro.ingresos.consumo.yape) }}</small>
           </div>
           <div class="summary-item" style="background: #17a2b8; font-size: 0.9rem;">
             <h4>Ingresos Totales</h4>
-            <div class="amount">S/ {{ totalIngresosDia.toFixed(2) }}</div>
+            <div class="amount">S/ {{ formatearDecimal(totalIngresosDia) }}</div>
           </div>
           <div class="summary-item" style="background: #dc3545; font-size: 0.9rem;">
             <h4>Gastos Extra</h4>
-            <div class="amount">S/ {{ registro.gastosExtras.toFixed(2) }}</div>
+            <div class="amount">S/ {{ formatearDecimal(registro.gastosExtras) }}</div>
           </div>
         </div>
       </div>
@@ -172,7 +172,7 @@
         <h4>Saldo Final del Día</h4>
         <div class="summary-item" style="background: #28a745;">
           <h4>Saldo Neto</h4>
-          <div class="amount">S/ {{ saldoFinal.toFixed(2) }}</div>
+          <div class="amount">S/ {{ formatearDecimal(saldoFinal) }}</div>
           <small style="opacity: 0.9;">{{ saldoFinal >= 0 ? 'Ganancia' : 'Pérdida' }} del día</small>
         </div>
       </div>
@@ -265,12 +265,12 @@
           <tbody>
             <tr v-for="(item, fecha) in registrosFiltrados" :key="fecha">
               <td>{{ formatearFecha(fecha) }}</td>
-              <td>S/ {{ (item.ingresos.alquiler.efectivo + item.ingresos.alquiler.yape).toFixed(2) }}</td>
-              <td>S/ {{ (item.ingresos.consumo.efectivo + item.ingresos.consumo.yape).toFixed(2) }}</td>
-              <td>S/ {{ calcularTotalIngresos(item).toFixed(2) }}</td>
-              <td>S/ {{ item.gastosExtras.toFixed(2) }}</td>
+              <td>S/ {{ formatearDecimal(formatearNumero(item.ingresos.alquiler.efectivo) + formatearNumero(item.ingresos.alquiler.yape)) }}</td>
+              <td>S/ {{ formatearDecimal(formatearNumero(item.ingresos.consumo.efectivo) + formatearNumero(item.ingresos.consumo.yape)) }}</td>
+              <td>S/ {{ formatearDecimal(calcularTotalIngresos(item)) }}</td>
+              <td>S/ {{ formatearDecimal(item.gastosExtras) }}</td>
               <td class="text-success" style="font-weight: 600;">
-                S/ {{ item.saldoFinal.toFixed(2) }}
+                S/ {{ formatearDecimal(item.saldoFinal) }}
               </td>
               <td>
                 <button 
@@ -333,23 +333,23 @@
       <div v-if="resumenMensual" class="summary-grid">
         <div class="summary-item">
           <h4>Total Alquiler</h4>
-          <div class="amount">S/ {{ resumenMensual.totalAlquiler.toFixed(2) }}</div>
+          <div class="amount">S/ {{ formatearDecimal(resumenMensual.totalAlquiler) }}</div>
         </div>
         <div class="summary-item">
           <h4>Total Consumo</h4>
-          <div class="amount">S/ {{ resumenMensual.totalConsumo.toFixed(2) }}</div>
+          <div class="amount">S/ {{ formatearDecimal(resumenMensual.totalConsumo) }}</div>
         </div>
         <div class="summary-item">
           <h4>Total Ingresos</h4>
-          <div class="amount">S/ {{ resumenMensual.totalIngresos.toFixed(2) }}</div>
+          <div class="amount">S/ {{ formatearDecimal(resumenMensual.totalIngresos) }}</div>
         </div>
         <div class="summary-item">
           <h4>Total Gastos</h4>
-          <div class="amount">S/ {{ resumenMensual.totalGastos.toFixed(2) }}</div>
+          <div class="amount">S/ {{ formatearDecimal(resumenMensual.totalGastos) }}</div>
         </div>
         <div class="summary-item" style="background: #28a745;">
           <h4>Saldo Final Mensual</h4>
-          <div class="amount">S/ {{ resumenMensual.saldoFinalMensual.toFixed(2) }}</div>
+          <div class="amount">S/ {{ formatearDecimal(resumenMensual.saldoFinalMensual) }}</div>
         </div>
       </div>
     </div>
@@ -413,6 +413,17 @@ export default {
     const resumenMensual = ref(null)
     const modoEdicion = ref(false)
 
+    // Función helper para formatear números de forma segura
+    const formatearNumero = (valor) => {
+      const numero = Number(valor)
+      return isNaN(numero) ? 0 : numero
+    }
+
+    const formatearDecimal = (valor) => {
+      const numero = formatearNumero(valor)
+      return numero.toFixed(2)
+    }
+
     // Configuración de tabs
     const tabs = [
       { id: 'registro', label: 'Registro Diario' },
@@ -423,12 +434,17 @@ export default {
 
     // Computed
     const totalIngresosDia = computed(() => {
-      return registro.ingresos.alquiler.efectivo + registro.ingresos.alquiler.yape +
-             registro.ingresos.consumo.efectivo + registro.ingresos.consumo.yape
+      const alquilerEfectivo = formatearNumero(registro.ingresos.alquiler.efectivo)
+      const alquilerYape = formatearNumero(registro.ingresos.alquiler.yape)
+      const consumoEfectivo = formatearNumero(registro.ingresos.consumo.efectivo)
+      const consumoYape = formatearNumero(registro.ingresos.consumo.yape)
+      
+      return alquilerEfectivo + alquilerYape + consumoEfectivo + consumoYape
     })
 
     const saldoFinal = computed(() => {
-      return totalIngresosDia.value - registro.gastosExtras
+      const gastos = formatearNumero(registro.gastosExtras)
+      return totalIngresosDia.value - gastos
     })
 
     const esHoy = computed(() => {
@@ -503,7 +519,7 @@ export default {
     }
 
     const limpiarFormulario = () => {
-      // Limpiar todos los campos y forzar reactividad
+      // Limpiar todos los campos y forzar reactividad con valores numéricos
       registro.ingresos.alquiler.efectivo = 0
       registro.ingresos.alquiler.yape = 0
       registro.ingresos.consumo.efectivo = 0
@@ -571,8 +587,12 @@ export default {
     }
 
     const calcularTotalIngresos = (item) => {
-      return item.ingresos.alquiler.efectivo + item.ingresos.alquiler.yape +
-             item.ingresos.consumo.efectivo + item.ingresos.consumo.yape
+      const alquilerEfectivo = formatearNumero(item.ingresos.alquiler.efectivo)
+      const alquilerYape = formatearNumero(item.ingresos.alquiler.yape)
+      const consumoEfectivo = formatearNumero(item.ingresos.consumo.efectivo)
+      const consumoYape = formatearNumero(item.ingresos.consumo.yape)
+      
+      return alquilerEfectivo + alquilerYape + consumoEfectivo + consumoYape
     }
 
     const calcularResumenMensual = () => {
@@ -723,6 +743,8 @@ export default {
       nombreMesSeleccionado,
       
       // Métodos
+      formatearNumero,
+      formatearDecimal,
       cargarRegistroExistente,
       guardarRegistro,
       limpiarFormulario,
