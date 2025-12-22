@@ -1,0 +1,22 @@
+{
+  "name": "control-balances",
+  "version": "1.0.0",
+  "description": "Aplicación web para control de balances diarios de tienda y alquiler de campo sintético",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "vite preview"
+  },
+  "keywords": ["vue", "balances", "control", "tienda", "alquiler"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "vue": "^3.4.0"
+  }
+}
