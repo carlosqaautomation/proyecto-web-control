@@ -129,6 +129,8 @@ select {
   border-radius: 5px;
   font-size: 1rem;
   transition: border-color 0.3s ease;
+  min-height: 48px; /* Mínimo para táctil */
+  touch-action: manipulation;
 }
 
 input[type="number"]:focus,
@@ -137,6 +139,7 @@ input[type="month"]:focus,
 select:focus {
   outline: none;
   border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
 input:disabled,
@@ -187,6 +190,14 @@ input.input-disabled:hover {
   text-decoration: none;
   display: inline-block;
   text-align: center;
+  min-height: 48px; /* Mínimo para táctil */
+  touch-action: manipulation; /* Mejora respuesta táctil */
+  user-select: none;
+}
+
+.btn:active {
+  transform: scale(0.95);
+  transition: transform 0.1s ease;
 }
 
 .btn-primary {

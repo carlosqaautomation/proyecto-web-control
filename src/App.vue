@@ -68,6 +68,8 @@
                 placeholder="0.00"
                 :disabled="!modoEdicion"
                 :class="{ 'input-disabled': !modoEdicion }"
+                inputmode="decimal"
+                @focus="$event.target.select()"
               >
             </div>
             <div>
@@ -79,6 +81,8 @@
                 placeholder="0.00"
                 :disabled="!modoEdicion"
                 :class="{ 'input-disabled': !modoEdicion }"
+                inputmode="decimal"
+                @focus="$event.target.select()"
               >
             </div>
           </div>
@@ -97,6 +101,8 @@
                 placeholder="0.00"
                 :disabled="!modoEdicion"
                 :class="{ 'input-disabled': !modoEdicion }"
+                inputmode="decimal"
+                @focus="$event.target.select()"
               >
             </div>
             <div>
@@ -108,6 +114,8 @@
                 placeholder="0.00"
                 :disabled="!modoEdicion"
                 :class="{ 'input-disabled': !modoEdicion }"
+                inputmode="decimal"
+                @focus="$event.target.select()"
               >
             </div>
           </div>
@@ -127,6 +135,8 @@
               placeholder="0.00"
               :disabled="!modoEdicion"
               :class="{ 'input-disabled': !modoEdicion }"
+              inputmode="decimal"
+              @focus="$event.target.select()"
             >
           </div>
         </div>
@@ -170,25 +180,47 @@
       <!-- Botones -->
       <div class="btn-group">
         <template v-if="modoEdicion">
-          <button class="btn btn-primary" @click="guardarRegistro">
+          <button 
+            class="btn btn-primary" 
+            @click="guardarRegistro"
+            @touchend.prevent="guardarRegistro"
+            type="button"
+          >
             💾 Guardar Registro
           </button>
-          <button class="btn btn-secondary" @click="limpiarFormulario">
+          <button 
+            class="btn btn-secondary" 
+            @click="limpiarFormulario"
+            @touchend.prevent="limpiarFormulario"
+            type="button"
+          >
             🧹 Limpiar
           </button>
           <button 
             v-if="registros[fechaSeleccionada]" 
             class="btn btn-danger" 
             @click="cancelarEdicion"
+            @touchend.prevent="cancelarEdicion"
+            type="button"
           >
             ❌ Cancelar
           </button>
         </template>
         <template v-else>
-          <button class="btn btn-primary" @click="habilitarEdicion">
+          <button 
+            class="btn btn-primary" 
+            @click="habilitarEdicion"
+            @touchend.prevent="habilitarEdicion"
+            type="button"
+          >
             ✏️ Editar Registro
           </button>
-          <button class="btn btn-secondary" @click="limpiarFormulario">
+          <button 
+            class="btn btn-secondary" 
+            @click="nuevoRegistro"
+            @touchend.prevent="nuevoRegistro"
+            type="button"
+          >
             📝 Nuevo Registro
           </button>
         </template>
@@ -471,12 +503,31 @@ export default {
     }
 
     const limpiarFormulario = () => {
+      // Limpiar todos los campos y forzar reactividad
       registro.ingresos.alquiler.efectivo = 0
       registro.ingresos.alquiler.yape = 0
       registro.ingresos.consumo.efectivo = 0
       registro.ingresos.consumo.yape = 0
       registro.gastosExtras = 0
-      modoEdicion.value = true // Habilitar edición al limpiar
+      
+      // Asegurar que está en modo edición
+      modoEdicion.value = true
+      
+      // Forzar actualización de la interfaz
+      setTimeout(() => {
+        // Enfocar el primer input para mejor UX
+        const primerInput = document.querySelector('input[type="number"]')
+        if (primerInput) {
+          primerInput.focus()
+        }
+      }, 100)
+    }
+
+    const nuevoRegistro = () => {
+      if (confirm('¿Esto creará un nuevo registro limpio. ¿Continuar?')) {
+        limpiarFormulario()
+        modoEdicion.value = true
+      }
     }
 
     const aplicarFiltros = () => {
@@ -635,8 +686,11 @@ export default {
     }
 
     // Watchers
-    watch(fechaSeleccionada, () => {
-      cargarRegistroExistente()
+    watch(fechaSeleccionada, (nuevaFecha, fechaAnterior) => {
+      // Solo cargar automáticamente si no está en modo edición o si realmente cambió la fecha
+      if (nuevaFecha !== fechaAnterior) {
+        cargarRegistroExistente()
+      }
     })
 
     // Lifecycle
@@ -685,7 +739,8 @@ export default {
       seleccionarMesActual,
       inicializarFechaActual,
       habilitarEdicion,
-      cancelarEdicion
+      cancelarEdicion,
+      nuevoRegistro
     }
   }
 }
