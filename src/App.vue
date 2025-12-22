@@ -383,6 +383,34 @@
       </div>
     </div>
   </div>
+
+  <!-- Modal Personalizado -->
+  <div v-if="modal.mostrar" class="modal-overlay" @click="cerrarModal">
+    <div class="modal-content" @click.stop>
+      <div class="modal-header" :class="'modal-' + modal.tipo">
+        <h3>{{ modal.titulo }}</h3>
+        <button class="modal-close" @click="cerrarModal">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-icon" :class="'icon-' + modal.tipo">
+          <span v-if="modal.tipo === 'success'">✓</span>
+          <span v-else-if="modal.tipo === 'error'">✕</span>
+          <span v-else-if="modal.tipo === 'warning'">⚠</span>
+          <span v-else>ℹ</span>
+        </div>
+        <p>{{ modal.mensaje }}</p>
+      </div>
+      <div class="modal-footer">
+        <template v-if="modal.onConfirm">
+          <button class="btn btn-secondary" @click="cerrarModal">Cancelar</button>
+          <button class="btn btn-primary" @click="modal.onConfirm(); cerrarModal()">Confirmar</button>
+        </template>
+        <template v-else>
+          <button class="btn btn-primary" @click="cerrarModal">OK</button>
+        </template>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -412,6 +440,48 @@ export default {
     const registrosFiltrados = ref({})
     const resumenMensual = ref(null)
     const modoEdicion = ref(false)
+    
+    // Estado del modal
+    const modal = reactive({
+      mostrar: false,
+      titulo: '',
+      mensaje: '',
+      tipo: 'info', // 'success', 'error', 'warning', 'info'
+      callback: null
+    })
+
+    // Funciones del modal
+    const mostrarModal = (titulo, mensaje, tipo = 'info', callback = null) => {
+      modal.titulo = titulo
+      modal.mensaje = mensaje
+      modal.tipo = tipo
+      modal.callback = callback
+      modal.mostrar = true
+    }
+
+    const cerrarModal = () => {
+      modal.mostrar = false
+      if (modal.callback && typeof modal.callback === 'function') {
+        modal.callback()
+      }
+    }
+
+    const mostrarExito = (mensaje, callback = null) => {
+      mostrarModal('¡Éxito!', mensaje, 'success', callback)
+    }
+
+    const mostrarError = (mensaje, callback = null) => {
+      mostrarModal('Error', mensaje, 'error', callback)
+    }
+
+    const mostrarConfirmacion = (titulo, mensaje, onConfirm, onCancel = null) => {
+      modal.titulo = titulo
+      modal.mensaje = mensaje
+      modal.tipo = 'warning'
+      modal.mostrar = true
+      modal.onConfirm = onConfirm
+      modal.onCancel = onCancel
+    }
 
     // Función helper para formatear números de forma segura
     const formatearNumero = (valor) => {
@@ -514,8 +584,10 @@ export default {
       guardarDatos()
       modoEdicion.value = false // Bloquear después de guardar
       
-      alert('Registro guardado correctamente')
-      aplicarFiltros()
+      mostrarExito(
+        `Registro guardado correctamente para el ${formatearFecha(fecha)}.\n\nSaldo final: S/ ${formatearDecimal(saldoFinal.value)}`,
+        () => aplicarFiltros()
+      )
     }
 
     const limpiarFormulario = () => {
@@ -540,10 +612,14 @@ export default {
     }
 
     const nuevoRegistro = () => {
-      if (confirm('¿Esto creará un nuevo registro limpio. ¿Continuar?')) {
-        limpiarFormulario()
-        modoEdicion.value = true
-      }
+      mostrarConfirmacion(
+        '¿Crear Nuevo Registro?',
+        'Esto limpiará todos los campos del formulario. ¿Deseas continuar?',
+        () => {
+          limpiarFormulario()
+          modoEdicion.value = true
+        }
+      )
     }
 
     const aplicarFiltros = () => {
@@ -579,11 +655,16 @@ export default {
     }
 
     const eliminarRegistro = (fecha) => {
-      if (confirm('¿Estás seguro de eliminar este registro?')) {
-        delete registros.value[fecha]
-        guardarDatos()
-        aplicarFiltros()
-      }
+      mostrarConfirmacion(
+        '¿Eliminar Registro?',
+        `¿Estás seguro de eliminar el registro del ${formatearFecha(fecha)}? Esta acción no se puede deshacer.`,
+        () => {
+          delete registros.value[fecha]
+          guardarDatos()
+          aplicarFiltros()
+          mostrarExito('Registro eliminado correctamente')
+        }
+      )
     }
 
     const calcularTotalIngresos = (item) => {
@@ -657,26 +738,30 @@ export default {
           registros.value = datos
           guardarDatos()
           aplicarFiltros()
-          alert('Datos importados correctamente')
+          mostrarExito('Datos importados correctamente')
         } catch (error) {
-          alert('Error al importar el archivo. Verifica que sea un JSON válido.')
+          mostrarError('Error al importar el archivo. Verifica que sea un archivo JSON válido.')
         }
       }
       lector.readAsText(archivo)
     }
 
     const limpiarTodosDatos = () => {
-      if (confirm('¿Estás seguro de eliminar TODOS los datos? Esta acción no se puede deshacer.')) {
-        registros.value = {}
-        guardarDatos()
-        aplicarFiltros()
-        alert('Todos los datos han sido eliminados')
-      }
+      mostrarConfirmacion(
+        '¡ATENCIÓN!',
+        '¿Estás seguro de eliminar TODOS los datos? Esta acción eliminará permanentemente todos los registros y no se puede deshacer.',
+        () => {
+          registros.value = {}
+          guardarDatos()
+          aplicarFiltros()
+          mostrarExito('Todos los datos han sido eliminados')
+        }
+      )
     }
 
     const actualizarResumen = () => {
       calcularResumenMensual()
-      alert('Resumen actualizado correctamente')
+      mostrarExito('Resumen actualizado correctamente')
     }
 
     const seleccionarMesActual = () => {
@@ -734,6 +819,7 @@ export default {
       resumenMensual,
       tabs,
       modoEdicion,
+      modal,
       
       // Computed
       saldoFinal,
@@ -762,7 +848,12 @@ export default {
       inicializarFechaActual,
       habilitarEdicion,
       cancelarEdicion,
-      nuevoRegistro
+      nuevoRegistro,
+      mostrarModal,
+      cerrarModal,
+      mostrarExito,
+      mostrarError,
+      mostrarConfirmacion
     }
   }
 }
