@@ -1,17 +1,17 @@
-// Configuración de JSONBin.io - Base de datos JSON gratuita
-// No requiere cuenta de pago ni configuración compleja
+// Configuración usando localStorage compartido simulando API
+// Solución temporal hasta tener una API confiable
 
-const JSONBIN_API_URL = 'https://api.jsonbin.io/v3/b'
-const BIN_ID = '676915d5ad19ca34f8d9f1c6' // ID público para este proyecto
-const API_KEY = '$2a$10$8vq2wQJrTQGFYG4Z2rqn7ux1p4FjqPQJ6HqP2zqM2vq8QwJrTQGF' // Clave pública
+// Para desarrollo local, usamos una simulación de API
+const API_BASE = 'https://jsonplaceholder.typicode.com'
+const STORAGE_KEY = 'control-balances-shared'
 
-// Configuración de headers para JSONBin
 export const getHeaders = () => ({
-  'Content-Type': 'application/json',
-  'X-Master-Key': API_KEY
+  'Content-Type': 'application/json'
 })
 
-export const getBinUrl = () => `${JSONBIN_API_URL}/${BIN_ID}`
+// Simulamos una API usando localStorage como respaldo principal
+export const getBinUrl = () => `${API_BASE}/posts/1`
+export const getStorageKey = () => STORAGE_KEY
 
 // Configuración por defecto
 export const defaultConfig = {

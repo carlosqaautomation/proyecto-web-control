@@ -364,36 +364,107 @@
 
     <!-- Datos -->
     <div v-if="activeTab === 'datos'" class="card">
-      <h3>Gestión de Datos</h3>
+      <h3>Gestión de Datos y Respaldos</h3>
       
-      <div class="form-section">
-        <h4>Exportar Datos</h4>
-        <p style="margin-bottom: 1rem;">Descarga todos tus registros en formato JSON para crear un respaldo o sincronizar con otros dispositivos.</p>
-        <div v-if="ultimaActualizacion" class="sync-info">
-          <small>📅 Última actualización: {{ new Date(ultimaActualizacion).toLocaleString('es-PE') }}</small>
+      <!-- Sección de Respaldos -->
+      <div class="form-section" style="background: #e3f2fd; border-left-color: #2196f3;">
+        <h4>🛡️ Sistema de Respaldo Avanzado</h4>
+        <p style="margin-bottom: 1rem;">Crea respaldos locales de todos tus datos para mayor seguridad.</p>
+        
+        <div class="backup-options">
+          <div class="backup-option">
+            <h5>📥 Respaldo Rápido (JSON Simple)</h5>
+            <p>Descarga solo los datos en formato compatible con la importación.</p>
+            <button class="btn btn-success" @click="crearRespaldoRapido">
+              📤 Descargar Respaldo Simple
+            </button>
+          </div>
+          
+          <div class="backup-option">
+            <h5>📦 Respaldo Completo (3 Archivos)</h5>
+            <p>Descarga datos en JSON completo, JSON simple y CSV para Excel.</p>
+            <button class="btn btn-primary" @click="crearRespaldoCompleto">
+              📋 Crear Respaldo Completo
+            </button>
+          </div>
+          
+          <div class="backup-option">
+            <h5>📊 Solo Excel (CSV)</h5>
+            <p>Descarga datos en formato CSV para abrir en Excel o Google Sheets.</p>
+            <button class="btn btn-secondary" @click="exportarCSV">
+              📈 Descargar Excel (CSV)
+            </button>
+          </div>
         </div>
-        <button class="btn btn-success" @click="exportarDatos">
-          📤 Exportar Datos JSON
-        </button>
+        
+        <div class="backup-info">
+          <div v-if="ultimaActualizacion" class="sync-info">
+            <small>📅 Última actualización: {{ new Date(ultimaActualizacion).toLocaleString('es-PE') }}</small>
+          </div>
+          <div class="data-stats">
+            <small>📊 Total de registros: {{ Object.keys(registros).length }}</small>
+          </div>
+        </div>
       </div>
-
+      
+      <!-- Sección de Importación -->
       <div class="form-section">
-        <h4>Importar Datos</h4>
-        <p style="margin-bottom: 1rem;">Carga un archivo JSON previamente exportado para sincronizar datos entre dispositivos o restaurar un respaldo.</p>
-        <input 
-          type="file" 
-          accept=".json" 
-          ref="archivoInput"
-          @change="importarDatos"
-          style="margin-bottom: 1rem;"
-        >
-        <div class="sync-tips">
-          <small>💡 <strong>Tip:</strong> Para sincronizar entre móvil y PC, exporta desde un dispositivo e importa en el otro.</small>
+        <h4>📂 Restaurar desde Respaldo</h4>
+        <p style="margin-bottom: 1rem;">Importa un archivo de respaldo para restaurar tus datos.</p>
+        
+        <div class="import-options">
+          <input 
+            type="file" 
+            accept=".json,.csv" 
+            ref="archivoRespaldo"
+            @change="restaurarRespaldo"
+            style="margin-bottom: 1rem;"
+          >
+          
+          <div class="import-info">
+            <small>✅ Compatible con: Respaldos JSON (completos y simples)</small><br>
+            <small>✅ Formatos soportados: .json</small><br>
+            <small>⚠️ Importante: Esto reemplazará todos los datos actuales</small>
+          </div>
         </div>
-        <br>
-        <button class="btn btn-danger" @click="limpiarTodosDatos" style="margin-top: 1rem;">
-          🗑️ Limpiar Todos los Datos
+      </div>
+      
+      <!-- Sección de Sincronización Manual -->
+      <div class="form-section">
+        <h4>🔄 Sincronización Manual</h4>
+        <p style="margin-bottom: 1rem;">Herramientas para importar/exportar datos tradicionales.</p>
+        
+        <div class="sync-options">
+          <button class="btn btn-success" @click="exportarDatos">
+            📤 Exportar Datos (Clásico)
+          </button>
+          
+          <input 
+            type="file" 
+            accept=".json" 
+            ref="archivoInput"
+            @change="importarDatos"
+            style="margin: 0 1rem;"
+          >
+        </div>
+        
+        <div class="sync-tips">
+          <small>💡 <strong>Tip:</strong> El respaldo completo es más seguro que la exportación clásica.</small>
+        </div>
+      </div>
+      
+      <!-- Sección de Limpieza -->
+      <div class="form-section" style="background: #ffebee; border-left-color: #f44336;">
+        <h4>🗑️ Limpieza de Datos</h4>
+        <p style="margin-bottom: 1rem; color: #d32f2f;">⚠️ <strong>Peligro:</strong> Esta acción eliminará permanentemente todos los datos.</p>
+        
+        <button class="btn btn-danger" @click="limpiarTodosDatos">
+          🗑️ Eliminar Todos los Datos
         </button>
+        
+        <div class="danger-warning">
+          <small>⚠️ Se recomienda crear un respaldo antes de eliminar datos</small>
+        </div>
       </div>
     </div>
   </div>
@@ -430,12 +501,14 @@
 <script>
 import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
 import { DatabaseService } from './database.js'
+import { BackupService } from './backup.js'
 
 export default {
   name: 'App',
   setup() {
     // Inicializar servicio de base de datos
     const dbService = new DatabaseService()
+    const backupService = new BackupService()
     const estadoConexion = ref('conectando') // 'conectando', 'conectado', 'sin_conexion', 'error'
     const mensajeConexion = ref('Conectando a la base de datos...')
     // Estado reactivo
@@ -589,26 +662,19 @@ export default {
 
     const guardarDatos = async () => {
       try {
-        // Guardar en Firebase
+        // Guardar usando el servicio de base de datos
         const resultado = await dbService.guardarRegistros(registros.value)
         
         if (resultado.success) {
           estadoConexion.value = 'conectado'
-          mensajeConexion.value = 'Guardado en la nube'
-          
-          // También guardar en localStorage como respaldo
-          const datosConTimestamp = {
-            ultimaActualizacion: new Date().toISOString(),
-            registros: registros.value
-          }
-          localStorage.setItem('control-balances', JSON.stringify(datosConTimestamp))
+          mensajeConexion.value = 'Datos guardados correctamente'
         } else {
           throw new Error(resultado.error)
         }
       } catch (error) {
-        console.error('Error guardando en Firebase:', error)
+        console.error('Error guardando datos:', error)
         
-        // Fallback a localStorage si Firebase falla
+        // Fallback directo a localStorage
         const datosConTimestamp = {
           ultimaActualizacion: new Date().toISOString(),
           registros: registros.value
@@ -616,7 +682,7 @@ export default {
         localStorage.setItem('control-balances', JSON.stringify(datosConTimestamp))
         
         estadoConexion.value = 'sin_conexion'
-        mensajeConexion.value = 'Guardado solo localmente'
+        mensajeConexion.value = 'Guardado localmente'
       }
     }
 
@@ -799,6 +865,123 @@ export default {
       })
     }
 
+    const crearRespaldoRapido = async () => {
+      try {
+        const resultado = await backupService.createDownloadableBackup(registros.value)
+        if (resultado.success) {
+          mostrarExito(
+            `Respaldo creado exitosamente!\n\n📄 Archivo: ${resultado.filename}\n📊 Registros: ${resultado.registros}\n💾 Tamaño: ${(resultado.size / 1024).toFixed(1)} KB`
+          )
+        } else {
+          mostrarError('Error creando el respaldo rápido')
+        }
+      } catch (error) {
+        console.error('Error en respaldo rápido:', error)
+        mostrarError(`Error: ${error.message}`)
+      }
+    }
+
+    const crearRespaldoCompleto = async () => {
+      try {
+        estadoConexion.value = 'conectando'
+        mensajeConexion.value = 'Creando respaldo completo...'
+        
+        const resultado = await backupService.createCompleteBackup(registros.value)
+        
+        if (resultado.success) {
+          const resumen = resultado.summary
+          mostrarExito(
+            `¡Respaldo completo creado! 🎉\n\n📦 Archivos generados: ${resultado.totalFiles}\n📊 Total registros: ${resumen.totalDias}\n💰 Ingresos totales: S/ ${resumen.ingresosTotales}\n💸 Gastos totales: S/ ${resumen.gastosTotales}\n💵 Saldo neto: S/ ${resumen.saldoNeto}\n\nRevisa tus descargas para encontrar los archivos.`
+          )
+        } else {
+          mostrarError(`Error creando respaldo completo: ${resultado.error}`)
+        }
+        
+        estadoConexion.value = 'conectado'
+        mensajeConexion.value = 'Conectado'
+      } catch (error) {
+        console.error('Error en respaldo completo:', error)
+        mostrarError(`Error: ${error.message}`)
+        estadoConexion.value = 'conectado'
+        mensajeConexion.value = 'Conectado'
+      }
+    }
+
+    const exportarCSV = () => {
+      try {
+        const csvData = backupService.generateCSV(registros.value)
+        const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `control-balances-${new Date().toISOString().split('T')[0]}.csv`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        
+        mostrarExito(
+          `Archivo CSV creado exitosamente!\n\n📄 Archivo: ${a.download}\n📊 Registros: ${Object.keys(registros.value).length}\n\n✅ Listo para abrir en Excel o Google Sheets`
+        )
+      } catch (error) {
+        console.error('Error exportando CSV:', error)
+        mostrarError(`Error creando CSV: ${error.message}`)
+      }
+    }
+
+    const restaurarRespaldo = async (event) => {
+      const archivo = event.target.files[0]
+      if (!archivo) return
+
+      try {
+        estadoConexion.value = 'conectando'
+        mensajeConexion.value = 'Restaurando respaldo...'
+        
+        const resultado = await backupService.restoreFromBackup(archivo)
+        
+        if (resultado.success) {
+          // Validar datos antes de restaurar
+          const validacion = backupService.validateData(resultado.registros)
+          
+          if (!validacion.valid) {
+            mostrarError(`Archivo inválido:\n${validacion.issues.join('\n')}`)
+            return
+          }
+          
+          // Mostrar confirmación con información del respaldo
+          const metadata = resultado.metadata
+          mostrarConfirmacion(
+            '¿Restaurar Respaldo?',
+            `¿Confirmas restaurar este respaldo?\n\n📄 Versión: ${metadata.version}\n📅 Creado: ${metadata.fechaCreacion}\n📊 Registros: ${metadata.totalRegistros}\n\n⚠️ Esto reemplazará todos los datos actuales.`,
+            async () => {
+              registros.value = resultado.registros
+              await guardarDatos()
+              aplicarFiltros()
+              calcularResumenMensual()
+              
+              mostrarExito(
+                `¡Respaldo restaurado exitosamente! 🎉\n\n📊 ${metadata.totalRegistros} registros importados\n📅 Período: ${metadata.resumen ? `${metadata.resumen.fechaInicio} a ${metadata.resumen.fechaFin}` : 'Múltiples fechas'}`
+              )
+            }
+          )
+        } else {
+          mostrarError(`Error restaurando respaldo: ${resultado.error}`)
+        }
+        
+        estadoConexion.value = 'conectado'
+        mensajeConexion.value = 'Conectado'
+      } catch (error) {
+        console.error('Error restaurando respaldo:', error)
+        mostrarError(`Error: ${error.message}`)
+        estadoConexion.value = 'conectado'
+        mensajeConexion.value = 'Conectado'
+      } finally {
+        // Limpiar input file
+        event.target.value = ''
+      }
+    }
+
     const exportarDatos = () => {
       const datos = JSON.stringify(registros.value, null, 2)
       
@@ -927,6 +1110,31 @@ export default {
       cargarRegistroExistente()
       calcularResumenMensual()
       
+      // Configurar sincronización en tiempo real entre pestañas del navegador
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'control-balances-shared' && e.newValue) {
+          try {
+            const data = JSON.parse(e.newValue)
+            console.log('🔄 Datos actualizados desde otra pestaña')
+            
+            // Solo actualizar si los datos son diferentes
+            if (JSON.stringify(registros.value) !== JSON.stringify(data.registros)) {
+              registros.value = data.registros || {}
+              ultimaActualizacion.value = data.ultimaActualizacion
+              aplicarFiltros()
+              
+              estadoConexion.value = 'conectado'
+              mensajeConexion.value = 'Sincronizado entre pestañas'
+              setTimeout(() => {
+                mensajeConexion.value = 'Conectado'
+              }, 3000)
+            }
+          } catch (error) {
+            console.error('Error procesando actualización:', error)
+          }
+        }
+      })
+      
       // Configurar listener para sincronización en tiempo real
       dbService.escucharCambios((data) => {
         if (!data.error) {
@@ -937,12 +1145,11 @@ export default {
             aplicarFiltros()
             
             // Mostrar notificación sutil de sincronización
-            if (estadoConexion.value === 'conectado') {
-              mensajeConexion.value = 'Datos sincronizados'
-              setTimeout(() => {
-                mensajeConexion.value = 'Conectado'
-              }, 2000)
-            }
+            estadoConexion.value = 'conectado'
+            mensajeConexion.value = 'Datos sincronizados'
+            setTimeout(() => {
+              mensajeConexion.value = 'Conectado'
+            }, 2000)
           }
         }
       })
@@ -1003,7 +1210,11 @@ export default {
       mostrarExito,
       mostrarError,
       mostrarConfirmacion,
-      descargarArchivo
+      descargarArchivo,
+      crearRespaldoRapido,
+      crearRespaldoCompleto,
+      exportarCSV,
+      restaurarRespaldo
     }
   }
 }

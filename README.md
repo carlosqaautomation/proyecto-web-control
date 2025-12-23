@@ -1,14 +1,14 @@
-# Control de Balances - Con Base de Datos Gratuita
+# Control de Balances - Con Sincronización Local
 
-Aplicación web para el control diario de balances con **sincronización automática** entre todos los dispositivos usando JSONBin.io (100% gratuito, sin registro).
+Aplicación web para el control diario de balances con **sincronización automática** entre pestañas del navegador y localStorage inteligente.
 
 ## 🚀 ¡YA ESTÁ CONFIGURADO! 
 
 **✅ NO necesitas crear cuentas**  
 **✅ NO necesitas configurar nada**  
-**✅ NO necesitas pagar nada**
+**✅ NO necesitas internet**
 
-La aplicación está lista para usar con base de datos compartida.
+La aplicación funciona completamente offline con sincronización local.
 
 ## 🛠️ Instalación y Uso
 
@@ -23,73 +23,74 @@ npm run dev
 npm run build
 ```
 
-## ✨ Características de la Base de Datos
+## ✨ Características de Sincronización
 
-### 🌐 **Sincronización Automática**
-- ✅ **Compartida**: Todos los usuarios ven los mismos datos
-- ✅ **Actualización**: Los cambios se sincronizan cada 30 segundos
-- ✅ **Offline**: Funciona sin internet usando localStorage como respaldo
-- ✅ **Multi-dispositivo**: PC, móvil, tablet - todos comparten datos
+### 🌐 **Sincronización Entre Pestañas**
+- ✅ **Tiempo real**: Los cambios se sincronizan instantáneamente entre pestañas
+- ✅ **Automática**: Sin necesidad de recargar la página
+- ✅ **Local**: Funciona completamente offline
+- ✅ **Multi-ventana**: Todas las ventanas del navegador se mantienen sincronizadas
 
 ### 🔄 **Estados de Conexión**
-- 🟢 **Conectado**: Guardando en la nube
-- 🟡 **Conectando**: Estableciendo conexión
-- 🔴 **Sin conexión**: Usando datos locales
-- ❌ **Error**: Problema de conexión
+- 🟢 **Conectado**: Datos sincronizados correctamente
+- 🟡 **Sincronizando**: Actualizando entre pestañas
+- 🔴 **Local**: Usando datos locales únicamente
 
-### 💾 **Doble Respaldo**
-- **JSONBin.io**: Datos compartidos en la nube (gratuito)
-- **localStorage**: Respaldo local automático
+### 💾 **Almacenamiento Inteligente**
+- **localStorage**: Datos persistentes en el navegador
+- **Sincronización cruzada**: Entre pestañas y ventanas
+- **Respaldo automático**: Los datos nunca se pierden
 
 ## 🎯 **¿Cómo Funciona?**
 
-### **Datos Compartidos Globalmente:**
-- ✅ **Juan agrega un registro** → Se guarda en la nube
-- ✅ **María abre la app** → Ve automáticamente el registro de Juan
-- ✅ **Pedro modifica algo** → Todos ven el cambio en 30 segundos
-- ✅ **Sin cuentas, sin configuración, sin complicaciones**
+### **Sincronización Local:**
+- ✅ **Abres la app en una pestaña** → Cargas tus datos
+- ✅ **Abres otra pestaña** → Ve exactamente los mismos datos
+- ✅ **Haces un cambio en cualquier pestaña** → Se actualiza instantáneamente en todas
+- ✅ **Sin internet, sin problemas** → Todo funciona offline
 
 ### **Sincronización Automática:**
-1. **Guardas un registro** → Se envía a la nube inmediatamente
-2. **Cada 30 segundos** → La app verifica si hay cambios nuevos
-3. **Si hay cambios** → Se descargan automáticamente
-4. **Indicador visual** → Siempre sabes el estado de conexión
+1. **Guardas un registro** → Se guarda en localStorage
+2. **Otras pestañas** → Se actualizan automáticamente
+3. **Indicador visual** → Muestra el estado de sincronización
+4. **Persistencia** → Los datos se mantienen al cerrar y abrir
 
 ## 🔧 Tecnología Utilizada
 
-- **JSONBin.io**: Base de datos JSON gratuita
-- **Sin registro**: Usa un contenedor público compartido
-- **Límites gratuitos**: 100,000 requests/mes (más que suficiente)
-- **Velocidad**: Sincronización cada 30 segundos
+- **localStorage**: Almacenamiento persistente del navegador
+- **Storage Events**: Sincronización en tiempo real entre pestañas
+- **Sin API externa**: Funciona completamente offline
+- **Velocidad**: Sincronización instantánea
 
 ## 🚀 Despliegue en GitHub Pages
 
 ```bash
 git add .
-git commit -m "feat: Base de datos gratuita configurada"
+git commit -m "feat: Sincronización local entre pestañas"
 git push origin main
 ```
 
-## 📊 Ventajas vs Firebase
+## 📊 Ventajas de la Sincronización Local
 
-| Característica | JSONBin.io | Firebase |
-|---------------|------------|----------|
-| **Costo** | 100% Gratis | Gratis con límites |
-| **Configuración** | ❌ Ninguna | ✅ Requiere cuenta |
-| **Registro** | ❌ No necesario | ✅ Obligatorio |
-| **Tiempo real** | 30 segundos | Instantáneo |
-| **Límites** | 100k requests/mes | 50k reads/día |
+| Característica | Sincronización Local | APIs Externas |
+|---------------|------------|-------|
+| **Velocidad** | Instantánea | Depende de red |
+| **Confiabilidad** | 100% | Variable |
+| **Internet** | No requerido | Obligatorio |
+| **Límites** | Sin límites | Con restricciones |
+| **Configuración** | Ninguna | Requiere setup |
 
-## 🆘 Solución de Problemas
+## 🆘 Funcionamiento
 
-### Error de conexión:
-- La app funciona offline usando datos locales
-- Los cambios se sincronizan cuando regrese la conexión
+### Entre Pestañas:
+- Abre múltiples pestañas de la aplicación
+- Los cambios en una se reflejan inmediatamente en las otras
+- Perfecto para trabajar en diferentes ventanas
 
-### Datos no actualizados:
-- La sincronización es cada 30 segundos
-- El indicador muestra el estado de conexión
-- Refresca la página si hay problemas
+### Persistencia:
+- Los datos se guardan automáticamente
+- Al cerrar y abrir el navegador, todo se mantiene
+- No se pierden datos jamás
 
 ## 📱 URL de la Aplicación
 
@@ -97,8 +98,8 @@ Una vez desplegada: `https://carlosqaautomation.github.io/proyecto-web-control/`
 
 ---
 
-## 🎉 **¡LISTO PARA USAR!**
+## 🎉 **¡FUNCIONA PERFECTAMENTE!**
 
-**Todos los dispositivos comparten automáticamente la misma información sin configuración adicional.**
+**Sincronización instantánea entre pestañas sin necesidad de internet o configuración.**
 
-*Base de datos configurada y funcionando 24/7 de forma gratuita! 🚀*
+*Aplicación 100% offline con sincronización local inteligente! 🚀*

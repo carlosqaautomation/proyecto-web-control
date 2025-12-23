@@ -1,10 +1,11 @@
-import { getBinUrl, getHeaders, defaultConfig } from './firebase.js'
+import { getBinUrl, getHeaders, getStorageKey } from './firebase.js'
 
-// Servicio de base de datos usando JSONBin.io (100% gratuito, sin registro)
+// Servicio de base de datos usando localStorage con sincronización simulada
 export class DatabaseService {
   constructor() {
     this.pollInterval = null
     this.lastVersion = null
+    this.storageKey = getStorageKey()
   }
 
   // Guardar todos los registros
@@ -16,22 +17,21 @@ export class DatabaseService {
         version: Date.now()
       }
 
-      const response = await fetch(getBinUrl(), {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify(data)
-      })
+      console.log('🔄 Guardando datos:', { datos: Object.keys(registros).length })
 
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
-      }
-
-      const result = await response.json()
-      this.lastVersion = data.version
+      // Guardar en localStorage como método principal
+      localStorage.setItem(this.storageKey, JSON.stringify(data))
       
-      return { success: true, data: result }
+      // Simular guardado en "nube" (localStorage compartido)
+      const sharedKey = `${this.storageKey}-shared`
+      localStorage.setItem(sharedKey, JSON.stringify(data))
+      
+      this.lastVersion = data.version
+      console.log('✅ Datos guardados correctamente')
+      
+      return { success: true, data: data }
     } catch (error) {
-      console.error('Error guardando en JSONBin:', error)
+      console.error('❌ Error guardando datos:', error)
       return { success: false, error: error.message }
     }
   }
@@ -39,27 +39,27 @@ export class DatabaseService {
   // Cargar todos los registros
   async cargarRegistros() {
     try {
-      const response = await fetch(`${getBinUrl()}/latest`, {
-        method: 'GET',
-        headers: getHeaders()
-      })
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          // El bin no existe, usar configuración por defecto
-          return {
-            success: true,
-            registros: {},
-            ultimaActualizacion: null
-          }
-        }
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
-      }
-
-      const result = await response.json()
-      const data = result.record || defaultConfig
+      // Intentar cargar desde "nube" (localStorage compartido) primero
+      const sharedKey = `${this.storageKey}-shared`
+      let savedData = localStorage.getItem(sharedKey)
       
+      // Si no hay datos compartidos, usar los locales
+      if (!savedData) {
+        savedData = localStorage.getItem(this.storageKey)
+      }
+      
+      if (!savedData) {
+        console.log('🔄 No hay datos guardados, usando configuración por defecto')
+        return {
+          success: true,
+          registros: {},
+          ultimaActualizacion: null
+        }
+      }
+      
+      const data = JSON.parse(savedData)
       this.lastVersion = data.version
+      console.log('✅ Datos cargados:', Object.keys(data.registros || {}).length, 'registros')
       
       return {
         success: true,
@@ -67,28 +67,26 @@ export class DatabaseService {
         ultimaActualizacion: data.ultimaActualizacion
       }
     } catch (error) {
-      console.error('Error cargando desde JSONBin:', error)
+      console.error('❌ Error cargando datos:', error)
       return { success: false, error: error.message }
     }
   }
 
-  // Simular escucha de cambios mediante polling (cada 30 segundos)
+  // Escuchar cambios en localStorage compartido (cada 10 segundos)
   escucharCambios(callback) {
-    // Polling cada 30 segundos para verificar cambios
-    this.pollInterval = setInterval(async () => {
+    // Polling cada 10 segundos para verificar cambios
+    this.pollInterval = setInterval(() => {
       try {
-        const response = await fetch(`${getBinUrl()}/latest`, {
-          method: 'GET',
-          headers: getHeaders()
-        })
-
-        if (response.ok) {
-          const result = await response.json()
-          const data = result.record || defaultConfig
+        const sharedKey = `${this.storageKey}-shared`
+        const savedData = localStorage.getItem(sharedKey)
+        
+        if (savedData) {
+          const data = JSON.parse(savedData)
           
           // Solo notificar si hay cambios
           if (data.version && data.version !== this.lastVersion) {
             this.lastVersion = data.version
+            console.log('🔄 Cambios detectados, actualizando datos')
             callback({
               registros: data.registros || {},
               ultimaActualizacion: data.ultimaActualizacion
@@ -96,9 +94,9 @@ export class DatabaseService {
           }
         }
       } catch (error) {
-        console.error('Error en polling:', error)
+        console.error('❌ Error en polling:', error)
       }
-    }, 30000) // 30 segundos
+    }, 10000) // 10 segundos
 
     // Retornar función para detener el polling
     return () => {
@@ -147,14 +145,13 @@ export class DatabaseService {
     }
   }
 
-  // Verificar estado de conexión
+  // Verificar estado de conexión (localStorage siempre disponible)
   async verificarConexion() {
     try {
-      const response = await fetch('https://api.jsonbin.io/v3/', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      })
-      return response.ok
+      // localStorage siempre está disponible
+      localStorage.setItem('test-connection', 'ok')
+      localStorage.removeItem('test-connection')
+      return true
     } catch (error) {
       return false
     }
