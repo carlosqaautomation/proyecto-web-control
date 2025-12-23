@@ -370,11 +370,37 @@ export class SupabaseDatabaseService {
     }
   }
 
-  // Método deshabilitado - no usar localStorage
+  // Actualizar datos directamente desde Supabase - consolidar todos los datos
   async actualizarDesdeBD() {
-    return {
-      success: false,
-      error: 'Método deshabilitado - solo se usa Supabase directamente'
+    try {
+      console.log('🔄 Actualizando datos desde Supabase...')
+      
+      // Usar la misma lógica de cargarRegistros para obtener datos consolidados
+      const resultado = await this.cargarRegistros()
+      
+      if (resultado.success) {
+        console.log('✅ Datos actualizados desde BD exitosamente')
+        return {
+          success: true,
+          data: resultado.data,
+          message: `Datos actualizados desde la base de datos`,
+          synced: true
+        }
+      } else {
+        return {
+          success: false,
+          error: resultado.error || 'Error cargando datos',
+          message: 'Error conectando con la base de datos'
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Error actualizando desde BD:', error)
+      return {
+        success: false,
+        error: error.message,
+        message: 'Error conectando con la base de datos'
+      }
     }
   }
 
