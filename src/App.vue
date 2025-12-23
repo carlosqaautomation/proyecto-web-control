@@ -505,32 +505,6 @@
         </div>
       </div>
       
-      <!-- Sección de Sincronización con Supabase -->
-      <div class="form-section" style="background: #f0fdf4; border-left-color: #22c55e;">
-        <h4>☁️ Sincronización con Base de Datos</h4>
-        <p style="margin-bottom: 1rem; color: #16a34a;">Controla la sincronización entre tu dispositivo y Supabase.</p>
-        
-        <div class="sync-controls">
-          <div class="sync-option">
-            <h5>📤 Subir Datos Locales a BD</h5>
-            <p style="margin-bottom: 0.5rem;">Fuerza la subida de tus datos locales a Supabase (solo usar si sabes que los datos locales son correctos).</p>
-            <button class="btn btn-warning" @click="forzarSincronizacionLocal" :disabled="estadoConexion === 'conectando'">
-              {{ estadoConexion === 'conectando' ? '⏳ Procesando...' : '🔄 Subir Locales a BD' }}
-            </button>
-            <small style="display: block; color: #92400e; margin-top: 0.5rem;">⚠️ Esto sobrescribirá los datos en Supabase</small>
-          </div>
-          
-          <div class="sync-option">
-            <h5>🗑️ Limpiar Solo Datos Locales</h5>
-            <p style="margin-bottom: 0.5rem;">Elimina solo los datos de tu dispositivo, manteniendo Supabase intacto.</p>
-            <button class="btn btn-secondary" @click="limpiarSoloLocales">
-              🧹 Limpiar Solo Locales
-            </button>
-            <small style="display: block; color: #6b7280; margin-top: 0.5rem;">💡 Útil cuando hay conflictos de sincronización</small>
-          </div>
-        </div>
-      </div>
-      
       <!-- Sección de Limpieza -->
       <div class="form-section" style="background: #ffebee; border-left-color: #f44336;">
         <h4>🗑️ Limpieza de Datos</h4>
@@ -1174,63 +1148,6 @@ export default {
         mensajeConexion.value = 'Error de conexión'
         mostrarError(`Error: ${error.message}`)
       }
-    }
-
-    const forzarSincronizacionLocal = async () => {
-      mostrarConfirmacion(
-        '¿Subir Datos Locales a BD?',
-        'Esto subirá TODOS tus datos locales a Supabase, sobrescribiendo cualquier dato existente en la base de datos.\n\n⚠️ Solo úsalo si estás seguro de que tus datos locales son los correctos.',
-        async () => {
-          try {
-            estadoConexion.value = 'conectando'
-            mensajeConexion.value = 'Subiendo datos locales a Supabase...'
-            
-            const resultado = await dbService.forzarSincronizacionLocal()
-            
-            if (resultado.success) {
-              estadoConexion.value = 'conectado'
-              mensajeConexion.value = 'Datos locales sincronizados a BD ☁️'
-              mostrarExito(`¡Datos locales subidos exitosamente! 🎉\n\n${resultado.message}`)
-            } else {
-              estadoConexion.value = 'error'
-              mensajeConexion.value = 'Error subiendo datos'
-              mostrarError(`Error: ${resultado.error}`)
-            }
-          } catch (error) {
-            console.error('Error forzando sincronización:', error)
-            estadoConexion.value = 'error'
-            mensajeConexion.value = 'Error de conexión'
-            mostrarError(`Error: ${error.message}`)
-          }
-        }
-      )
-    }
-
-    const limpiarSoloLocales = () => {
-      mostrarConfirmacion(
-        '¿Limpiar Solo Datos Locales?',
-        'Esto eliminará SOLO los datos de tu dispositivo, manteniendo Supabase intacto.\n\n💡 Al recargar la página, se descargarán los datos desde Supabase (si los hay).',
-        () => {
-          try {
-            localStorage.removeItem('control-balances-data')
-            localStorage.removeItem('pending-sync')
-            localStorage.removeItem('device-id')
-            localStorage.removeItem('user-id')
-            
-            // Limpiar datos en memoria
-            registros.value = {}
-            aplicarFiltros()
-            calcularResumenMensual()
-            cargarRegistroExistente()
-            
-            mostrarExito(
-              '🧹 Datos locales eliminados\n\n📱 Tu dispositivo está ahora "limpio"\n🔄 Recarga la página para descargar desde Supabase'
-            )
-          } catch (error) {
-            mostrarError(`Error limpiando datos locales: ${error.message}`)
-          }
-        }
-      )
     }
 
     const seleccionarMesActual = () => {

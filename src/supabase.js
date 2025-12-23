@@ -4,33 +4,21 @@ import { supabase, TABLE_NAME, defaultConfig, getStorageKey } from './firebase.j
 export class SupabaseDatabaseService {
   constructor() {
     this.isOnline = navigator.onLine
-    this.userId = this.getUserId()
     this.supabaseReady = false
     this.setupConnectionListeners()
     // No inicializar Supabase automáticamente, solo cuando se necesite
-  }
-
-  // Generar o recuperar ID de usuario único
-  getUserId() {
-    let userId = localStorage.getItem('user-id')
-    if (!userId) {
-      userId = 'user_' + Math.random().toString(36).substr(2, 12) + '_' + Date.now()
-      localStorage.setItem('user-id', userId)
-    }
-    return userId
   }
 
   // Configurar listeners para detectar cambios de conexión
   setupConnectionListeners() {
     window.addEventListener('online', () => {
       this.isOnline = true
-      console.log('🌐 Conexión restaurada - sincronizando...')
-      this.syncPendingChanges()
+      console.log('🌐 Conexión restaurada')
     })
 
     window.addEventListener('offline', () => {
       this.isOnline = false
-      console.log('📴 Sin conexión - trabajando offline')
+      console.log('📴 Sin conexión')
     })
   }
 
@@ -137,38 +125,27 @@ export class SupabaseDatabaseService {
   async guardarRegistros(registros) {
     const timestamp = new Date().toISOString()
     const version = Date.now()
+    const genericUserId = 'control_balances_user' // ID genérico
 
     try {
-      // Siempre guardar en localStorage primero (offline-first)
-      const localData = {
-        registros,
-        ultimaActualizacion: timestamp,
-        version,
-        deviceId: defaultConfig.deviceId
-      }
-      
-      localStorage.setItem(getStorageKey(), JSON.stringify(localData))
-      console.log('💾 Guardado local exitoso')
-
-      // Solo intentar Supabase si está online y inicializado
+      // Solo guardar directamente en Supabase - sin localStorage
       if (this.isOnline) {
         try {
           const isConnected = await this.initializeSupabase()
           if (isConnected) {
-            await this.syncToSupabase(registros, timestamp, version)
-            console.log('☁️ Sincronización con Supabase exitosa')
-            return { success: true, synced: true, data: localData }
+            await this.syncToSupabase(registros, timestamp, version, genericUserId)
+            console.log('☁️ Guardado en Supabase exitoso')
+            return { success: true, synced: true, data: { registros, ultimaActualizacion: timestamp, version } }
+          } else {
+            throw new Error('No se pudo conectar a Supabase')
           }
         } catch (supabaseError) {
-          console.log('⚠️  Error sincronizando con Supabase:', supabaseError.message)
-          // No fallar, continuar en modo offline
+          console.log('❌ Error guardando en Supabase:', supabaseError.message)
+          throw supabaseError
         }
+      } else {
+        throw new Error('Sin conexión a internet')
       }
-      
-      // Marcar para sincronización posterior si no se pudo sincronizar
-      this.markForSync()
-      console.log('📴 Guardado offline - se sincronizará cuando sea posible')
-      return { success: true, synced: false, data: localData }
 
     } catch (error) {
       console.error('❌ Error guardando:', error)
@@ -177,7 +154,7 @@ export class SupabaseDatabaseService {
   }
 
   // Sincronizar con Supabase
-  async syncToSupabase(registros, timestamp, version) {
+  async syncToSupabase(registros, timestamp, version, userId = 'control_balances_user') {
     if (!supabase) {
       throw new Error('Supabase no inicializado')
     }
@@ -186,7 +163,7 @@ export class SupabaseDatabaseService {
       const { data, error } = await supabase
         .from(TABLE_NAME)
         .upsert({
-          user_id: this.userId,
+          user_id: userId,
           data: registros,
           ultima_actualizacion: timestamp,
           version: version,
@@ -202,85 +179,76 @@ export class SupabaseDatabaseService {
     }
   }
 
-  // Cargar registros desde Supabase
+  // Cargar registros desde Supabase - todos los datos disponibles
   async cargarRegistros() {
     try {
-      // Cargar datos locales primero
-      const localData = this.getLocalData()
-      
-      // Solo intentar Supabase si está online
       if (this.isOnline) {
         try {
           const isConnected = await this.initializeSupabase()
           if (!isConnected) {
-            console.log('📱 Modo offline - usando datos locales')
-            return this.handleLoadResult(localData, false)
+            console.log('❌ No se pudo conectar a Supabase')
+            return this.handleLoadResult(defaultConfig, false)
           }
 
-          const { data, error } = await supabase
+          // Cargar TODOS los datos de TODOS los usuarios
+          const { data: todosLosDatos, error } = await supabase
             .from(TABLE_NAME)
             .select('id,user_id,data,ultima_actualizacion,version,device_id,created_at')
-            .eq('user_id', this.userId)
-            .maybeSingle()
+            .order('created_at', { ascending: false })
 
           if (error && error.code !== 'PGRST116') {
             console.log('⚠️  Error cargando desde Supabase:', error.message)
-            return this.handleLoadResult(localData, false)
+            return this.handleLoadResult(defaultConfig, false)
           }
 
-          if (data) {
-            // Comparar versiones para determinar qué datos son más recientes
-            const supabaseData = {
-              registros: data.data || {},
-              ultimaActualizacion: data.ultima_actualizacion,
-              version: data.version || 1
+          if (todosLosDatos && todosLosDatos.length > 0) {
+            // Consolidar todos los registros de todos los usuarios
+            let registrosConsolidados = {}
+            let totalRegistros = 0
+
+            todosLosDatos.forEach(record => {
+              console.log(`📥 Procesando datos del usuario: ${record.user_id}`)
+              
+              if (record.data && typeof record.data === 'object') {
+                Object.keys(record.data).forEach(fecha => {
+                  const registro = record.data[fecha]
+                  // Solo incluir registros activos
+                  if (!registro.estado || registro.estado === 'activo') {
+                    // Si ya existe un registro para esta fecha, mantener el más reciente
+                    if (!registrosConsolidados[fecha] || 
+                        new Date(record.ultima_actualizacion) > new Date(registrosConsolidados[fecha].ultimaActualizacion)) {
+                      registrosConsolidados[fecha] = {
+                        ...registro,
+                        usuarioOriginal: record.user_id,
+                        ultimaActualizacionRegistro: record.ultima_actualizacion
+                      }
+                      totalRegistros++
+                    }
+                  }
+                })
+              }
+            })
+
+            const datosConsolidados = {
+              registros: registrosConsolidados,
+              ultimaActualizacion: new Date().toISOString(),
+              version: 1
             }
 
-            if (!localData || supabaseData.version > localData.version) {
-              // Los datos de Supabase son más recientes
-              console.log('☁️ Datos de Supabase más recientes - actualizando local')
-              localStorage.setItem(getStorageKey(), JSON.stringify(supabaseData))
-              return this.handleLoadResult(supabaseData, true)
-            } else if (localData.version > supabaseData.version) {
-              // Los datos locales son más recientes - sincronizar a Supabase
-              console.log('💾 Datos locales más recientes - sincronizando a Supabase')
-              try {
-                await this.syncToSupabase(localData.registros, localData.ultimaActualizacion, localData.version)
-                return this.handleLoadResult(localData, true)
-              } catch (syncError) {
-                console.log('⚠️  Error sincronizando:', syncError.message)
-                return this.handleLoadResult(localData, false)
-              }
-            } else {
-              // Misma versión
-              console.log('✅ Datos sincronizados')
-              return this.handleLoadResult(localData, true)
-            }
+            console.log(`☁️ Datos consolidados cargados: ${totalRegistros} registros de ${todosLosDatos.length} usuarios`)
+            return this.handleLoadResult(datosConsolidados, true)
           } else {
-            // No hay datos en Supabase - podría ser que se eliminaron intencionalmente
-            if (localData && Object.keys(localData.registros || {}).length > 0) {
-              console.log('⚠️  No hay datos en Supabase pero sí localmente')
-              console.log('🔍 Esto puede indicar que los datos fueron eliminados de la BD')
-              console.log('💭 Opciones: 1) Los datos se eliminaron intencionalmente, 2) Es primera vez')
-              
-              // En lugar de sincronizar automáticamente, dar prioridad a la BD
-              // Si la BD está vacía, probablemente es porque se eliminó intencionalmente
-              console.log('🗑️  Respetando BD vacía - limpiando datos locales obsoletos')
-              localStorage.removeItem(getStorageKey())
-              return this.handleLoadResult(defaultConfig, true)
-            } else {
-              // No hay datos en ningún lado
-              console.log('📝 Primera vez - no hay datos en ningún lado')
-              return this.handleLoadResult(defaultConfig, true)
-            }
+            // No hay datos en absoluto
+            console.log('📝 No hay datos en Supabase - empezando desde cero')
+            return this.handleLoadResult(defaultConfig, true)
           }
         } catch (error) {
           console.error('❌ Error conectando a Supabase:', error)
-          return this.handleLoadResult(localData, false)
+          return this.handleLoadResult(defaultConfig, false)
         }
       } else {
-        console.log('📴 Sin conexión - usando datos locales')
-        return this.handleLoadResult(localData, false)
+        console.log('📴 Sin conexión - no hay datos disponibles')
+        return this.handleLoadResult(defaultConfig, false)
       }
 
     } catch (error) {
@@ -289,15 +257,10 @@ export class SupabaseDatabaseService {
     }
   }
 
-  // Obtener datos locales
+  // Obtener datos locales (deshabilitado - solo Supabase)
   getLocalData() {
-    try {
-      const savedData = localStorage.getItem(getStorageKey())
-      return savedData ? JSON.parse(savedData) : null
-    } catch (error) {
-      console.error('❌ Error leyendo datos locales:', error)
-      return null
-    }
+    // No usar localStorage - solo Supabase
+    return null
   }
 
   // Procesar resultado de carga
@@ -317,25 +280,14 @@ export class SupabaseDatabaseService {
     }
   }
 
-  // Marcar datos para sincronización posterior
+  // Marcar datos para sincronización posterior (deshabilitado)
   markForSync() {
-    localStorage.setItem('pending-sync', 'true')
+    // No usar localStorage - solo Supabase directo
   }
 
-  // Sincronizar cambios pendientes cuando se restaure la conexión
+  // Sincronizar cambios pendientes cuando se restaure la conexión (deshabilitado)
   async syncPendingChanges() {
-    if (localStorage.getItem('pending-sync') === 'true') {
-      try {
-        const localData = this.getLocalData()
-        if (localData) {
-          await this.syncToSupabase(localData.registros, localData.ultimaActualizacion, localData.version)
-          localStorage.removeItem('pending-sync')
-          console.log('✅ Sincronización pendiente completada')
-        }
-      } catch (error) {
-        console.error('❌ Error en sincronización pendiente:', error)
-      }
-    }
+    // No usar localStorage - solo Supabase directo
   }
 
   // Suscribirse a cambios en tiempo real
@@ -351,12 +303,10 @@ export class SupabaseDatabaseService {
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
-          table: TABLE_NAME,
-          filter: `user_id=eq.${this.userId}`
+          table: TABLE_NAME
         }, (payload) => {
           console.log('🔄 Cambio detectado en tiempo real:', payload)
-          if (payload.new && payload.new.device_id !== defaultConfig.deviceId) {
-            // Solo procesar cambios de otros dispositivos
+          if (payload.new) {
             callback({
               registros: payload.new.data || {},
               ultimaActualizacion: payload.new.ultima_actualizacion,
@@ -386,217 +336,61 @@ export class SupabaseDatabaseService {
     }
   }
 
-  // Limpiar todos los datos
+  // Limpiar todos los datos (solo Supabase)
   async limpiarTodosDatos() {
     try {
-      // Limpiar datos locales
-      localStorage.removeItem(getStorageKey())
-      localStorage.removeItem('pending-sync')
+      console.log('🗑️ Eliminando todos los datos de Supabase')
       
-      // Si hay conexión y Supabase disponible, limpiar datos en Supabase
-      if (this.isOnline && supabase) {
-        try {
+      if (this.isOnline) {
+        const isConnected = await this.initializeSupabase()
+        if (isConnected) {
+          // Eliminar TODOS los datos, no solo de un usuario
           const { error } = await supabase
             .from(TABLE_NAME)
             .delete()
-            .eq('user_id', this.userId)
-
-          if (error) throw error
-          console.log('☁️ Datos limpiados en Supabase')
-        } catch (supabaseError) {
-          console.log('⚠️  Error limpiando Supabase (datos locales sí fueron limpiados):', supabaseError.message)
+            .neq('id', 0) // Eliminar todo (condición que siempre es true)
+            
+          if (error) {
+            console.error('❌ Error eliminando datos de Supabase:', error)
+            throw error
+          }
+          
+          console.log('☁️ Todos los datos eliminados de Supabase')
+        } else {
+          throw new Error('No se pudo conectar a Supabase')
         }
+      } else {
+        throw new Error('Sin conexión a internet')
       }
-
-      console.log('🗑️  Todos los datos limpiados')
+      
       return { success: true }
     } catch (error) {
       console.error('❌ Error limpiando datos:', error)
-      return { success: false, error: error.message }
+      throw error
     }
   }
 
-  // Nuevo método: Actualizar datos directamente desde Supabase API
+  // Método deshabilitado - no usar localStorage
   async actualizarDesdeBD() {
-    try {
-      console.log('🔄 Actualizando datos desde Supabase...')
-      
-      // Hacer fetch directo a la API de Supabase (igual al curl)
-      const response = await fetch('https://wyneqgctmbpmeuiuzsbl.supabase.co/rest/v1/control_balances', {
-        method: 'GET',
-        headers: {
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bmVxZ2N0bWJwbWV1aXV6c2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjI5NjcsImV4cCI6MjA4MjA5ODk2N30.vDq_FBNTXMq69yL-XKPY1L1utrtkeOB6cYVb5XT4524',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bmVxZ2N0bWJwbWV1aXV6c2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjI5NjcsImV4cCI6MjA4MjA5ODk2N30.vDq_FBNTXMq69yL-XKPY1L1utrtkeOB6cYVb5XT4524',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status} ${response.statusText}`)
-      }
-
-      const todosLosDatos = await response.json()
-      console.log('📊 Datos recibidos de Supabase:', todosLosDatos)
-
-      // Procesar TODOS los registros de TODOS los usuarios
-      let registrosConsolidados = {}
-      let totalUsuarios = 0
-      let totalRegistros = 0
-
-      if (Array.isArray(todosLosDatos) && todosLosDatos.length > 0) {
-        todosLosDatos.forEach(record => {
-          totalUsuarios++
-          console.log(`📥 Procesando datos del usuario: ${record.user_id}`)
-          
-          if (record.data && typeof record.data === 'object') {
-            // Consolidar todos los registros de este usuario
-            Object.keys(record.data).forEach(fecha => {
-              const registro = record.data[fecha]
-              // Solo incluir registros activos (si no tiene estado o es activo)
-              if (!registro.estado || registro.estado === 'activo') {
-                registrosConsolidados[fecha] = {
-                  ...registro,
-                  usuario: record.user_id,
-                  ultimaActualizacion: record.ultima_actualizacion
-                }
-                totalRegistros++
-              }
-            })
-          }
-        })
-        
-        // Actualizar localStorage con los datos consolidados
-        const datosParaGuardar = {
-          registros: registrosConsolidados,
-          ultimaActualizacion: new Date().toISOString(),
-          version: 1,
-          consolidado: true // Marcar como datos consolidados
-        }
-        
-        localStorage.setItem(getStorageKey(), JSON.stringify(datosParaGuardar))
-        console.log('💾 Datos consolidados guardados en localStorage')
-      }
-
-      if (totalRegistros === 0) {
-        console.log('⚠️  No se encontraron registros activos en Supabase')
-        return {
-          success: true,
-          data: { registros: {}, ultimaActualizacion: new Date().toISOString() },
-          message: 'No hay registros activos en la base de datos',
-          synced: true
-        }
-      }
-
-      console.log('✅ Consolidación completada')
-      return {
-        success: true,
-        data: {
-          registros: registrosConsolidados,
-          ultimaActualizacion: new Date().toISOString()
-        },
-        message: `Datos consolidados: ${totalRegistros} registros activos de ${totalUsuarios} usuarios`,
-        synced: true
-      }
-
-    } catch (error) {
-      console.error('❌ Error actualizando desde BD:', error)
-      return {
-        success: false,
-        error: error.message,
-        message: 'Error conectando con la base de datos'
-      }
+    return {
+      success: false,
+      error: 'Método deshabilitado - solo se usa Supabase directamente'
     }
   }
 
-  // Método para cambiar estado de registro a inactivo (eliminación lógica)
+  // Método deshabilitado - no hay localStorage
   async eliminarRegistro(fecha) {
-    try {
-      console.log(`🗑️ Cambiando estado del registro ${fecha} a inactivo...`)
-      
-      // Cargar datos actuales
-      const localData = this.getLocalData()
-      if (!localData || !localData.registros || !localData.registros[fecha]) {
-        return { success: false, error: 'Registro no encontrado' }
-      }
-
-      // Cambiar estado del registro a inactivo
-      localData.registros[fecha] = {
-        ...localData.registros[fecha],
-        estado: 'inactivo',
-        fechaEliminacion: new Date().toISOString(),
-        eliminadoPor: this.userId
-      }
-
-      // Actualizar timestamp y versión
-      localData.ultimaActualizacion = new Date().toISOString()
-      localData.version = (localData.version || 1) + 1
-
-      // Guardar localmente
-      localStorage.setItem(getStorageKey(), JSON.stringify(localData))
-
-      // Intentar sincronizar con Supabase si está disponible
-      if (this.isOnline && supabase) {
-        try {
-          await this.syncToSupabase(localData.registros, localData.ultimaActualizacion, localData.version)
-          console.log('☁️ Eliminación lógica sincronizada con Supabase')
-          return { 
-            success: true, 
-            synced: true,
-            message: `Registro ${fecha} marcado como inactivo y sincronizado`
-          }
-        } catch (supabaseError) {
-          console.log('⚠️  Error sincronizando eliminación:', supabaseError.message)
-        }
-      }
-
-      // Marcar para sincronización posterior
-      this.markForSync()
-      return { 
-        success: true, 
-        synced: false,
-        message: `Registro ${fecha} marcado como inactivo localmente`
-      }
-      
-    } catch (error) {
-      console.error('❌ Error eliminando registro:', error)
-      return { success: false, error: error.message }
+    return {
+      success: false,
+      error: 'Método deshabilitado - no hay datos locales para eliminar'
     }
   }
 
-  // Método para forzar sincronización de datos locales a Supabase (solo cuando usuario lo decide)
+  // Método deshabilitado - no hay datos locales para sincronizar
   async forzarSincronizacionLocal() {
-    try {
-      console.log('🔄 Forzando sincronización de datos locales a Supabase...')
-      
-      const localData = this.getLocalData()
-      if (!localData || Object.keys(localData.registros || {}).length === 0) {
-        return {
-          success: false,
-          error: 'No hay datos locales para sincronizar'
-        }
-      }
-      
-      // Intentar sincronizar a Supabase
-      if (this.isOnline && supabase) {
-        await this.syncToSupabase(localData.registros, localData.ultimaActualizacion, localData.version)
-        console.log('☁️ Datos locales forzados a Supabase exitosamente')
-        
-        return {
-          success: true,
-          message: `${Object.keys(localData.registros).length} registros sincronizados a Supabase`,
-          synced: true
-        }
-      } else {
-        return {
-          success: false,
-          error: 'No hay conexión con Supabase'
-        }
-      }
-      
-    } catch (error) {
-      console.error('❌ Error forzando sincronización:', error)
-      return { success: false, error: error.message }
+    return {
+      success: false,
+      error: 'No hay datos locales - solo se usa Supabase directamente'
     }
   }
 }
