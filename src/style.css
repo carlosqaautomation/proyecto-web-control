@@ -39,6 +39,72 @@ body {
   opacity: 0.9;
 }
 
+/* Connection Status */
+.connection-status {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-radius: 25px;
+  backdrop-filter: blur(10px);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.status-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: white;
+}
+
+.status-conectado {
+  background: rgba(40, 167, 69, 0.2);
+}
+
+.status-conectado .status-dot {
+  background: #28a745;
+}
+
+.status-conectando {
+  background: rgba(255, 193, 7, 0.2);
+}
+
+.status-conectando .status-dot {
+  background: #ffc107;
+}
+
+.status-sin_conexion {
+  background: rgba(220, 53, 69, 0.2);
+}
+
+.status-sin_conexion .status-dot {
+  background: #dc3545;
+}
+
+.status-error {
+  background: rgba(220, 53, 69, 0.3);
+}
+
+.status-error .status-dot {
+  background: #dc3545;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.3; }
+}
+
 /* Navigation */
 .nav-tabs {
   display: flex;
@@ -427,6 +493,33 @@ input.input-disabled:hover {
 .text-danger { color: #dc3545; }
 .text-warning { color: #ffc107; }
 .text-info { color: #17a2b8; }
+
+/* Sync Info Styles */
+.sync-info {
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+  border: 1px solid #667eea;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin: 1rem 0;
+  text-align: center;
+}
+
+.sync-info small {
+  color: #333;
+  font-weight: 500;
+}
+
+.sync-tips {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 5px;
+  padding: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.sync-tips small {
+  color: #856404;
+}
 
 /* Date Selector Styles */
 .date-selector-container {

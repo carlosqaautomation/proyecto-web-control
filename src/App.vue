@@ -4,6 +4,14 @@
     <header class="header">
       <h1>Control de Balances</h1>
       <p>Tienda & Alquiler de Campo Sintético</p>
+      
+      <!-- Indicador de estado de conexión -->
+      <div class="connection-status" :class="'status-' + estadoConexion">
+        <div class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text">{{ mensajeConexion }}</span>
+        </div>
+      </div>
     </header>
 
     <!-- Navigation -->
@@ -358,17 +366,20 @@
     <div v-if="activeTab === 'datos'" class="card">
       <h3>Gestión de Datos</h3>
       
-      <div class="form-section mb-3">
+      <div class="form-section">
         <h4>Exportar Datos</h4>
-        <p style="margin-bottom: 1rem;">Descarga todos tus registros en formato JSON para crear un respaldo.</p>
+        <p style="margin-bottom: 1rem;">Descarga todos tus registros en formato JSON para crear un respaldo o sincronizar con otros dispositivos.</p>
+        <div v-if="ultimaActualizacion" class="sync-info">
+          <small>📅 Última actualización: {{ new Date(ultimaActualizacion).toLocaleString('es-PE') }}</small>
+        </div>
         <button class="btn btn-success" @click="exportarDatos">
-          Exportar Datos JSON
+          📤 Exportar Datos JSON
         </button>
       </div>
 
       <div class="form-section">
         <h4>Importar Datos</h4>
-        <p style="margin-bottom: 1rem;">Carga un archivo JSON previamente exportado para restaurar tus datos.</p>
+        <p style="margin-bottom: 1rem;">Carga un archivo JSON previamente exportado para sincronizar datos entre dispositivos o restaurar un respaldo.</p>
         <input 
           type="file" 
           accept=".json" 
@@ -376,9 +387,12 @@
           @change="importarDatos"
           style="margin-bottom: 1rem;"
         >
+        <div class="sync-tips">
+          <small>💡 <strong>Tip:</strong> Para sincronizar entre móvil y PC, exporta desde un dispositivo e importa en el otro.</small>
+        </div>
         <br>
         <button class="btn btn-danger" @click="limpiarTodosDatos" style="margin-top: 1rem;">
-          Limpiar Todos los Datos
+          🗑️ Limpiar Todos los Datos
         </button>
       </div>
     </div>
@@ -414,11 +428,16 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
+import { DatabaseService } from './database.js'
 
 export default {
   name: 'App',
   setup() {
+    // Inicializar servicio de base de datos
+    const dbService = new DatabaseService()
+    const estadoConexion = ref('conectando') // 'conectando', 'conectado', 'sin_conexion', 'error'
+    const mensajeConexion = ref('Conectando a la base de datos...')
     // Estado reactivo
     const activeTab = ref('registro')
     const fechaSeleccionada = ref(new Date().toISOString().split('T')[0])
@@ -440,6 +459,7 @@ export default {
     const registrosFiltrados = ref({})
     const resumenMensual = ref(null)
     const modoEdicion = ref(false)
+    const ultimaActualizacion = ref(null)
     
     // Estado del modal
     const modal = reactive({
@@ -534,17 +554,70 @@ export default {
       return fecha.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' })
     })
 
-    // Métodos
-    const cargarDatos = () => {
-      const datosGuardados = localStorage.getItem('control-balances')
-      if (datosGuardados) {
-        registros.value = JSON.parse(datosGuardados)
+    // Métodos de base de datos
+    const cargarDatos = async () => {
+      try {
+        estadoConexion.value = 'conectando'
+        mensajeConexion.value = 'Cargando datos...'
+        
+        const resultado = await dbService.cargarRegistros()
+        
+        if (resultado.success) {
+          registros.value = resultado.registros || {}
+          ultimaActualizacion.value = resultado.ultimaActualizacion
+          estadoConexion.value = 'conectado'
+          mensajeConexion.value = 'Conectado'
+        } else {
+          // Fallback a localStorage si Firebase falla
+          const datosLocales = localStorage.getItem('control-balances')
+          if (datosLocales) {
+            const datos = JSON.parse(datosLocales)
+            registros.value = datos.registros || datos
+            ultimaActualizacion.value = datos.ultimaActualizacion
+          }
+          estadoConexion.value = 'sin_conexion'
+          mensajeConexion.value = 'Sin conexión - usando datos locales'
+        }
+        
+        aplicarFiltros()
+      } catch (error) {
+        console.error('Error cargando datos:', error)
+        estadoConexion.value = 'error'
+        mensajeConexion.value = 'Error de conexión'
       }
-      aplicarFiltros()
     }
 
-    const guardarDatos = () => {
-      localStorage.setItem('control-balances', JSON.stringify(registros.value))
+    const guardarDatos = async () => {
+      try {
+        // Guardar en Firebase
+        const resultado = await dbService.guardarRegistros(registros.value)
+        
+        if (resultado.success) {
+          estadoConexion.value = 'conectado'
+          mensajeConexion.value = 'Guardado en la nube'
+          
+          // También guardar en localStorage como respaldo
+          const datosConTimestamp = {
+            ultimaActualizacion: new Date().toISOString(),
+            registros: registros.value
+          }
+          localStorage.setItem('control-balances', JSON.stringify(datosConTimestamp))
+        } else {
+          throw new Error(resultado.error)
+        }
+      } catch (error) {
+        console.error('Error guardando en Firebase:', error)
+        
+        // Fallback a localStorage si Firebase falla
+        const datosConTimestamp = {
+          ultimaActualizacion: new Date().toISOString(),
+          registros: registros.value
+        }
+        localStorage.setItem('control-balances', JSON.stringify(datosConTimestamp))
+        
+        estadoConexion.value = 'sin_conexion'
+        mensajeConexion.value = 'Guardado solo localmente'
+      }
     }
 
     const cargarRegistroExistente = () => {
@@ -658,11 +731,24 @@ export default {
       mostrarConfirmacion(
         '¿Eliminar Registro?',
         `¿Estás seguro de eliminar el registro del ${formatearFecha(fecha)}? Esta acción no se puede deshacer.`,
-        () => {
-          delete registros.value[fecha]
-          guardarDatos()
-          aplicarFiltros()
-          mostrarExito('Registro eliminado correctamente')
+        async () => {
+          try {
+            const resultado = await dbService.eliminarRegistro(fecha)
+            if (resultado.success) {
+              delete registros.value[fecha]
+              await guardarDatos()
+              aplicarFiltros()
+              mostrarExito('Registro eliminado correctamente')
+            } else {
+              mostrarError('Error al eliminar el registro')
+            }
+          } catch (error) {
+            // Fallback local
+            delete registros.value[fecha]
+            await guardarDatos()
+            aplicarFiltros()
+            mostrarExito('Registro eliminado (solo localmente)')
+          }
         }
       )
     }
@@ -715,6 +801,27 @@ export default {
 
     const exportarDatos = () => {
       const datos = JSON.stringify(registros.value, null, 2)
+      
+      // Si el navegador soporta Web Share API (móviles)
+      if (navigator.share && /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        const blob = new Blob([datos], { type: 'application/json' })
+        const file = new File([blob], `control-balances-${new Date().toISOString().split('T')[0]}.json`, { type: 'application/json' })
+        
+        navigator.share({
+          title: 'Control de Balances - Datos',
+          text: 'Archivo de respaldo de datos',
+          files: [file]
+        }).catch(() => {
+          // Si falla Web Share, usar descarga tradicional
+          descargarArchivo(datos)
+        })
+      } else {
+        // Descarga tradicional para PC
+        descargarArchivo(datos)
+      }
+    }
+
+    const descargarArchivo = (datos) => {
       const blob = new Blob([datos], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       
@@ -725,6 +832,8 @@ export default {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      
+      mostrarExito('Datos exportados correctamente. Comparte este archivo para sincronizar con otros dispositivos.')
     }
 
     const importarDatos = (event) => {
@@ -749,12 +858,25 @@ export default {
     const limpiarTodosDatos = () => {
       mostrarConfirmacion(
         '¡ATENCIÓN!',
-        '¿Estás seguro de eliminar TODOS los datos? Esta acción eliminará permanentemente todos los registros y no se puede deshacer.',
-        () => {
-          registros.value = {}
-          guardarDatos()
-          aplicarFiltros()
-          mostrarExito('Todos los datos han sido eliminados')
+        '¿Estás seguro de eliminar TODOS los datos? Esta acción eliminará permanentemente todos los registros de todos los dispositivos y no se puede deshacer.',
+        async () => {
+          try {
+            const resultado = await dbService.limpiarTodosDatos()
+            if (resultado.success) {
+              registros.value = {}
+              localStorage.removeItem('control-balances')
+              aplicarFiltros()
+              mostrarExito('Todos los datos han sido eliminados de todos los dispositivos')
+            } else {
+              mostrarError('Error al eliminar datos en la nube')
+            }
+          } catch (error) {
+            // Fallback local
+            registros.value = {}
+            localStorage.removeItem('control-balances')
+            aplicarFiltros()
+            mostrarExito('Datos eliminados localmente')
+          }
         }
       )
     }
@@ -799,11 +921,35 @@ export default {
     })
 
     // Lifecycle
-    onMounted(() => {
-      cargarDatos()
+    onMounted(async () => {
+      await cargarDatos()
       inicializarFechaActual()
       cargarRegistroExistente()
       calcularResumenMensual()
+      
+      // Configurar listener para sincronización en tiempo real
+      dbService.escucharCambios((data) => {
+        if (!data.error) {
+          // Solo actualizar si los datos son diferentes (evitar bucles)
+          if (JSON.stringify(registros.value) !== JSON.stringify(data.registros)) {
+            registros.value = data.registros
+            ultimaActualizacion.value = data.ultimaActualizacion
+            aplicarFiltros()
+            
+            // Mostrar notificación sutil de sincronización
+            if (estadoConexion.value === 'conectado') {
+              mensajeConexion.value = 'Datos sincronizados'
+              setTimeout(() => {
+                mensajeConexion.value = 'Conectado'
+              }, 2000)
+            }
+          }
+        }
+      })
+    })
+    
+    onUnmounted(() => {
+      dbService.detenerListeners()
     })
 
     return {
@@ -819,6 +965,9 @@ export default {
       resumenMensual,
       tabs,
       modoEdicion,
+      ultimaActualizacion,
+      estadoConexion,
+      mensajeConexion,
       modal,
       
       // Computed
@@ -853,7 +1002,8 @@ export default {
       cerrarModal,
       mostrarExito,
       mostrarError,
-      mostrarConfirmacion
+      mostrarConfirmacion,
+      descargarArchivo
     }
   }
 }
