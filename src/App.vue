@@ -59,6 +59,49 @@
         </div>
       </div>
 
+      <!-- Información del Trabajador -->
+      <div class="form-section" style="background: #f8f9ff; border-left-color: #667eea;">
+        <h4 style="color: #667eea; display: flex; align-items: center; gap: 0.5rem;">
+          <span>👤</span>
+          Información del Trabajador
+        </h4>
+        <div class="form-group">
+          <label for="nombreTrabajador" style="font-weight: 600; color: #4a5568; margin-bottom: 0.5rem; display: block;">
+            <span style="color: #e53e3e;">*</span> Nombre del Trabajador
+          </label>
+          <div style="position: relative;">
+            <input 
+              type="text" 
+              id="nombreTrabajador"
+              v-model="registro.nombreTrabajador"
+              placeholder="👤 Ej: Juan Carlos Pérez"
+              :disabled="!modoEdicion"
+              :class="{ 'input-disabled': !modoEdicion, 'input-required': !registro.nombreTrabajador.trim() }"
+              style="
+                width: 100%; 
+                max-width: 500px; 
+                padding: 12px 16px; 
+                font-size: 16px; 
+                border: 2px solid #e2e8f0; 
+                border-radius: 8px; 
+                transition: all 0.3s ease;
+                background: white;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+              "
+              @focus="$event.target.style.borderColor = '#667eea'; $event.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)'"
+              @blur="$event.target.style.borderColor = '#e2e8f0'; $event.target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)'"
+            >
+            <div v-if="!modoEdicion && registro.nombreTrabajador" class="worker-badge">
+              <span class="worker-icon">✅</span>
+              <span class="worker-text">Registrado por: {{ registro.nombreTrabajador }}</span>
+            </div>
+          </div>
+          <small style="color: #718096; margin-top: 0.5rem; display: block;">
+            <span style="color: #e53e3e;">*</span> Campo obligatorio - Identifica quién realizó este registro
+          </small>
+        </div>
+      </div>
+
       <!-- Ingresos -->
       <div class="form-section">
         <h4>Ingresos</h4>
@@ -249,9 +292,12 @@
           <label>Hasta:</label>
           <input type="date" v-model="filtroHasta">
         </div>
-        <div style="display: flex; align-items: end;">
+        <div style="display: flex; align-items: end; gap: 0.5rem;">
           <button class="btn btn-secondary" @click="aplicarFiltros">
-            Filtrar
+            🔍 Filtrar
+          </button>
+          <button class="btn btn-primary" @click="actualizarDesdeBD" :disabled="estadoConexion === 'conectando'">
+            {{ estadoConexion === 'conectando' ? '⏳ Actualizando...' : '🔄 Actualizar desde BD' }}
           </button>
         </div>
       </div>
@@ -262,6 +308,7 @@
           <thead>
             <tr>
               <th>Fecha</th>
+              <th>Trabajador</th>
               <th>Alquiler</th>
               <th>Consumo</th>
               <th>Total Ingresos</th>
@@ -273,6 +320,7 @@
           <tbody>
             <tr v-for="(item, fecha) in registrosFiltrados" :key="fecha">
               <td>{{ formatearFecha(fecha) }}</td>
+              <td>{{ item.nombreTrabajador || 'Sin asignar' }}</td>
               <td>S/ {{ formatearDecimal(formatearNumero(item.ingresos.alquiler.efectivo) + formatearNumero(item.ingresos.alquiler.yape)) }}</td>
               <td>S/ {{ formatearDecimal(formatearNumero(item.ingresos.consumo.efectivo) + formatearNumero(item.ingresos.consumo.yape)) }}</td>
               <td>S/ {{ formatearDecimal(calcularTotalIngresos(item)) }}</td>
@@ -287,13 +335,6 @@
                   @click="editarRegistro(fecha)"
                 >
                   Editar
-                </button>
-                <button 
-                  class="btn btn-danger" 
-                  style="padding: 0.5rem; font-size: 0.8rem; margin-left: 0.5rem;"
-                  @click="eliminarRegistro(fecha)"
-                >
-                  Eliminar
                 </button>
               </td>
             </tr>
@@ -326,6 +367,9 @@
             >
             <button class="btn btn-primary btn-refresh" @click="actualizarResumen">
               🔄 Actualizar
+            </button>
+            <button class="btn btn-success" @click="actualizarDesdeBD" :disabled="estadoConexion === 'conectando'">
+              {{ estadoConexion === 'conectando' ? '⏳' : '🌐 Desde BD' }}
             </button>
             <button class="btn btn-secondary btn-today" @click="seleccionarMesActual">
               📅 Mes Actual
@@ -521,6 +565,7 @@ export default {
     
     // Datos del registro actual
     const registro = reactive({
+      nombreTrabajador: '',
       ingresos: {
         alquiler: { efectivo: 0, yape: 0 },
         consumo: { efectivo: 0, yape: 0 }
@@ -693,6 +738,7 @@ export default {
       const fecha = fechaSeleccionada.value
       if (registros.value[fecha]) {
         const reg = registros.value[fecha]
+        registro.nombreTrabajador = reg.nombreTrabajador || ''
         registro.ingresos.alquiler.efectivo = reg.ingresos.alquiler.efectivo || 0
         registro.ingresos.alquiler.yape = reg.ingresos.alquiler.yape || 0
         registro.ingresos.consumo.efectivo = reg.ingresos.consumo.efectivo || 0
@@ -708,6 +754,7 @@ export default {
     const guardarRegistro = () => {
       const fecha = fechaSeleccionada.value
       const nuevoRegistro = {
+        nombreTrabajador: registro.nombreTrabajador || '',
         ingresos: {
           alquiler: { 
             efectivo: Number(registro.ingresos.alquiler.efectivo) || 0,
@@ -734,6 +781,7 @@ export default {
 
     const limpiarFormulario = () => {
       // Limpiar todos los campos y forzar reactividad con valores numéricos
+      registro.nombreTrabajador = ''
       registro.ingresos.alquiler.efectivo = 0
       registro.ingresos.alquiler.yape = 0
       registro.ingresos.consumo.efectivo = 0
@@ -745,10 +793,10 @@ export default {
       
       // Forzar actualización de la interfaz
       setTimeout(() => {
-        // Enfocar el primer input para mejor UX
-        const primerInput = document.querySelector('input[type="number"]')
-        if (primerInput) {
-          primerInput.focus()
+        // Enfocar el campo del nombre del trabajador para mejor UX
+        const nombreInput = document.querySelector('#nombreTrabajador')
+        if (nombreInput) {
+          nombreInput.focus()
         }
       }, 100)
     }
@@ -787,6 +835,7 @@ export default {
     const editarRegistro = (fecha) => {
       const reg = registros.value[fecha]
       fechaSeleccionada.value = fecha
+      registro.nombreTrabajador = reg.nombreTrabajador || ''
       registro.ingresos.alquiler.efectivo = reg.ingresos.alquiler.efectivo
       registro.ingresos.alquiler.yape = reg.ingresos.alquiler.yape
       registro.ingresos.consumo.efectivo = reg.ingresos.consumo.efectivo
@@ -794,32 +843,6 @@ export default {
       registro.gastosExtras = reg.gastosExtras
       
       activeTab.value = 'registro'
-    }
-
-    const eliminarRegistro = (fecha) => {
-      mostrarConfirmacion(
-        '¿Eliminar Registro?',
-        `¿Estás seguro de eliminar el registro del ${formatearFecha(fecha)}? Esta acción no se puede deshacer.`,
-        async () => {
-          try {
-            const resultado = await dbService.eliminarRegistro(fecha)
-            if (resultado.success) {
-              delete registros.value[fecha]
-              await guardarDatos()
-              aplicarFiltros()
-              mostrarExito('Registro eliminado correctamente')
-            } else {
-              mostrarError('Error al eliminar el registro')
-            }
-          } catch (error) {
-            // Fallback local
-            delete registros.value[fecha]
-            await guardarDatos()
-            aplicarFiltros()
-            mostrarExito('Registro eliminado (solo localmente)')
-          }
-        }
-      )
     }
 
     const calcularTotalIngresos = (item) => {
@@ -1069,6 +1092,49 @@ export default {
       mostrarExito('Resumen actualizado correctamente')
     }
 
+    const actualizarDesdeBD = async () => {
+      try {
+        estadoConexion.value = 'conectando'
+        mensajeConexion.value = 'Actualizando desde base de datos...'
+        
+        const resultado = await dbService.actualizarDesdeBD()
+        
+        if (resultado.success) {
+          // Actualizar los datos en la aplicación
+          registros.value = resultado.data.registros || {}
+          ultimaActualizacion.value = resultado.data.ultimaActualizacion
+          
+          // Actualizar filtros y resumen
+          aplicarFiltros()
+          calcularResumenMensual()
+          cargarRegistroExistente() // Recargar registro actual si cambió
+          
+          // Actualizar estado de conexión
+          if (resultado.synced) {
+            estadoConexion.value = 'conectado'
+            mensajeConexion.value = 'Actualizado desde Supabase 🌐'
+          } else {
+            estadoConexion.value = 'sin_conexion'
+            mensajeConexion.value = 'Funcionando offline 💾'
+          }
+          
+          // Mostrar mensaje de éxito
+          mostrarExito(
+            `¡Datos actualizados desde la BD! 🎉\n\n${resultado.message}\n\n📊 Total registros: ${Object.keys(resultado.data.registros).length}\n⏰ Última actualización: ${new Date().toLocaleString('es-PE')}`
+          )
+        } else {
+          estadoConexion.value = 'error'
+          mensajeConexion.value = 'Error de conexión con BD'
+          mostrarError(`Error actualizando desde BD:\n${resultado.message || resultado.error}`)
+        }
+      } catch (error) {
+        console.error('Error actualizando desde BD:', error)
+        estadoConexion.value = 'error'
+        mensajeConexion.value = 'Error de conexión'
+        mostrarError(`Error: ${error.message}`)
+      }
+    }
+
     const seleccionarMesActual = () => {
       mesSeleccionado.value = new Date().toISOString().slice(0, 7)
       calcularResumenMensual()
@@ -1180,7 +1246,6 @@ export default {
       limpiarFormulario,
       aplicarFiltros,
       editarRegistro,
-      eliminarRegistro,
       calcularTotalIngresos,
       calcularResumenMensual,
       formatearFecha,
@@ -1188,6 +1253,7 @@ export default {
       importarDatos,
       limpiarTodosDatos,
       actualizarResumen,
+      actualizarDesdeBD,
       seleccionarMesActual,
       inicializarFechaActual,
       habilitarEdicion,
@@ -1207,3 +1273,90 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+/* Estilos específicos para el input del trabajador */
+.worker-badge {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+  animation: slideDown 0.3s ease-out;
+}
+
+.worker-icon {
+  font-size: 16px;
+  animation: bounce 2s infinite;
+}
+
+.worker-text {
+  flex: 1;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-3px);
+  }
+  60% {
+    transform: translateY(-2px);
+  }
+}
+
+/* Estilos para input requerido */
+.input-required:not(:focus) {
+  border-color: #feb2b2 !important;
+  background-color: #fef5e7 !important;
+}
+
+/* Mejorar el estilo del input cuando está enfocado */
+#nombreTrabajador:focus {
+  outline: none;
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+  background-color: #fafbff !important;
+}
+
+/* Estilo para input deshabilitado */
+#nombreTrabajador.input-disabled {
+  background-color: #f7fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #4a5568 !important;
+  cursor: not-allowed;
+}
+
+/* Animación suave para transiciones */
+#nombreTrabajador {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Hover effect cuando está habilitado */
+#nombreTrabajador:not(.input-disabled):hover {
+  border-color: #a0aec0 !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+</style>

@@ -413,4 +413,152 @@ export class SupabaseDatabaseService {
       return { success: false, error: error.message }
     }
   }
+
+  // Nuevo método: Actualizar datos directamente desde Supabase API
+  async actualizarDesdeBD() {
+    try {
+      console.log('🔄 Actualizando datos desde Supabase...')
+      
+      // Hacer fetch directo a la API de Supabase (igual al curl)
+      const response = await fetch('https://wyneqgctmbpmeuiuzsbl.supabase.co/rest/v1/control_balances', {
+        method: 'GET',
+        headers: {
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bmVxZ2N0bWJwbWV1aXV6c2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjI5NjcsImV4cCI6MjA4MjA5ODk2N30.vDq_FBNTXMq69yL-XKPY1L1utrtkeOB6cYVb5XT4524',
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bmVxZ2N0bWJwbWV1aXV6c2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1MjI5NjcsImV4cCI6MjA4MjA5ODk2N30.vDq_FBNTXMq69yL-XKPY1L1utrtkeOB6cYVb5XT4524',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status} ${response.statusText}`)
+      }
+
+      const todosLosDatos = await response.json()
+      console.log('📊 Datos recibidos de Supabase:', todosLosDatos)
+
+      // Procesar TODOS los registros de TODOS los usuarios
+      let registrosConsolidados = {}
+      let totalUsuarios = 0
+      let totalRegistros = 0
+
+      if (Array.isArray(todosLosDatos) && todosLosDatos.length > 0) {
+        todosLosDatos.forEach(record => {
+          totalUsuarios++
+          console.log(`📥 Procesando datos del usuario: ${record.user_id}`)
+          
+          if (record.data && typeof record.data === 'object') {
+            // Consolidar todos los registros de este usuario
+            Object.keys(record.data).forEach(fecha => {
+              const registro = record.data[fecha]
+              // Solo incluir registros activos (si no tiene estado o es activo)
+              if (!registro.estado || registro.estado === 'activo') {
+                registrosConsolidados[fecha] = {
+                  ...registro,
+                  usuario: record.user_id,
+                  ultimaActualizacion: record.ultima_actualizacion
+                }
+                totalRegistros++
+              }
+            })
+          }
+        })
+        
+        // Actualizar localStorage con los datos consolidados
+        const datosParaGuardar = {
+          registros: registrosConsolidados,
+          ultimaActualizacion: new Date().toISOString(),
+          version: 1,
+          consolidado: true // Marcar como datos consolidados
+        }
+        
+        localStorage.setItem(getStorageKey(), JSON.stringify(datosParaGuardar))
+        console.log('💾 Datos consolidados guardados en localStorage')
+      }
+
+      if (totalRegistros === 0) {
+        console.log('⚠️  No se encontraron registros activos en Supabase')
+        return {
+          success: true,
+          data: { registros: {}, ultimaActualizacion: new Date().toISOString() },
+          message: 'No hay registros activos en la base de datos',
+          synced: true
+        }
+      }
+
+      console.log('✅ Consolidación completada')
+      return {
+        success: true,
+        data: {
+          registros: registrosConsolidados,
+          ultimaActualizacion: new Date().toISOString()
+        },
+        message: `Datos consolidados: ${totalRegistros} registros activos de ${totalUsuarios} usuarios`,
+        synced: true
+      }
+
+    } catch (error) {
+      console.error('❌ Error actualizando desde BD:', error)
+      return {
+        success: false,
+        error: error.message,
+        message: 'Error conectando con la base de datos'
+      }
+    }
+  }
+
+  // Método para cambiar estado de registro a inactivo (eliminación lógica)
+  async eliminarRegistro(fecha) {
+    try {
+      console.log(`🗑️ Cambiando estado del registro ${fecha} a inactivo...`)
+      
+      // Cargar datos actuales
+      const localData = this.getLocalData()
+      if (!localData || !localData.registros || !localData.registros[fecha]) {
+        return { success: false, error: 'Registro no encontrado' }
+      }
+
+      // Cambiar estado del registro a inactivo
+      localData.registros[fecha] = {
+        ...localData.registros[fecha],
+        estado: 'inactivo',
+        fechaEliminacion: new Date().toISOString(),
+        eliminadoPor: this.userId
+      }
+
+      // Actualizar timestamp y versión
+      localData.ultimaActualizacion = new Date().toISOString()
+      localData.version = (localData.version || 1) + 1
+
+      // Guardar localmente
+      localStorage.setItem(getStorageKey(), JSON.stringify(localData))
+
+      // Intentar sincronizar con Supabase si está disponible
+      if (this.isOnline && supabase) {
+        try {
+          await this.syncToSupabase(localData.registros, localData.ultimaActualizacion, localData.version)
+          console.log('☁️ Eliminación lógica sincronizada con Supabase')
+          return { 
+            success: true, 
+            synced: true,
+            message: `Registro ${fecha} marcado como inactivo y sincronizado`
+          }
+        } catch (supabaseError) {
+          console.log('⚠️  Error sincronizando eliminación:', supabaseError.message)
+        }
+      }
+
+      // Marcar para sincronización posterior
+      this.markForSync()
+      return { 
+        success: true, 
+        synced: false,
+        message: `Registro ${fecha} marcado como inactivo localmente`
+      }
+      
+    } catch (error) {
+      console.error('❌ Error eliminando registro:', error)
+      return { success: false, error: error.message }
+    }
+  }
 }
