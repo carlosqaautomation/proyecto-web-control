@@ -500,17 +500,18 @@
 
 <script>
 import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
-import { DatabaseService } from './database.js'
+import { SupabaseDatabaseService } from './supabase.js'
 import { BackupService } from './backup.js'
 
 export default {
   name: 'App',
   setup() {
-    // Inicializar servicio de base de datos
-    const dbService = new DatabaseService()
+    // Inicializar servicio de base de datos con Supabase
+    const dbService = new SupabaseDatabaseService()
     const backupService = new BackupService()
+    let realtimeSubscription = null
     const estadoConexion = ref('conectando') // 'conectando', 'conectado', 'sin_conexion', 'error'
-    const mensajeConexion = ref('Conectando a la base de datos...')
+    const mensajeConexion = ref('Iniciando aplicación...')
     // Estado reactivo
     const activeTab = ref('registro')
     const fechaSeleccionada = ref(new Date().toISOString().split('T')[0])
@@ -631,25 +632,28 @@ export default {
     const cargarDatos = async () => {
       try {
         estadoConexion.value = 'conectando'
-        mensajeConexion.value = 'Cargando datos...'
+        mensajeConexion.value = 'Iniciando aplicación...'
         
         const resultado = await dbService.cargarRegistros()
         
         if (resultado.success) {
-          registros.value = resultado.registros || {}
-          ultimaActualizacion.value = resultado.ultimaActualizacion
-          estadoConexion.value = 'conectado'
-          mensajeConexion.value = 'Conectado'
-        } else {
-          // Fallback a localStorage si Firebase falla
-          const datosLocales = localStorage.getItem('control-balances')
-          if (datosLocales) {
-            const datos = JSON.parse(datosLocales)
-            registros.value = datos.registros || datos
-            ultimaActualizacion.value = datos.ultimaActualizacion
+          registros.value = resultado.data.registros || {}
+          ultimaActualizacion.value = resultado.data.ultimaActualizacion
+          
+          if (resultado.synced) {
+            estadoConexion.value = 'conectado'
+            mensajeConexion.value = 'Sincronizado con Supabase 🌐'
+          } else {
+            estadoConexion.value = 'sin_conexion'
+            mensajeConexion.value = 'Funcionando offline - datos guardados localmente 💾'
           }
-          estadoConexion.value = 'sin_conexion'
-          mensajeConexion.value = 'Sin conexión - usando datos locales'
+          
+          // Configurar sincronización en tiempo real
+          setupRealtimeSync()
+        } else {
+          estadoConexion.value = 'error'
+          mensajeConexion.value = 'Error cargando datos'
+          mostrarError(`Error: ${resultado.error}`)
         }
         
         aplicarFiltros()
@@ -662,27 +666,26 @@ export default {
 
     const guardarDatos = async () => {
       try {
-        // Guardar usando el servicio de base de datos
         const resultado = await dbService.guardarRegistros(registros.value)
         
         if (resultado.success) {
-          estadoConexion.value = 'conectado'
-          mensajeConexion.value = 'Datos guardados correctamente'
+          ultimaActualizacion.value = resultado.data.ultimaActualizacion
+          
+          if (resultado.synced) {
+            estadoConexion.value = 'conectado'
+            mensajeConexion.value = 'Sincronizado con Supabase 🌐'
+          } else {
+            estadoConexion.value = 'sin_conexion'
+            mensajeConexion.value = 'Guardado localmente - funciona sin internet 💾'
+          }
         } else {
           throw new Error(resultado.error)
         }
       } catch (error) {
         console.error('Error guardando datos:', error)
-        
-        // Fallback directo a localStorage
-        const datosConTimestamp = {
-          ultimaActualizacion: new Date().toISOString(),
-          registros: registros.value
-        }
-        localStorage.setItem('control-balances', JSON.stringify(datosConTimestamp))
-        
-        estadoConexion.value = 'sin_conexion'
-        mensajeConexion.value = 'Guardado localmente'
+        estadoConexion.value = 'error'
+        mensajeConexion.value = 'Error guardando datos'
+        mostrarError(`Error: ${error.message}`)
       }
     }
 
@@ -1041,24 +1044,21 @@ export default {
     const limpiarTodosDatos = () => {
       mostrarConfirmacion(
         '¡ATENCIÓN!',
-        '¿Estás seguro de eliminar TODOS los datos? Esta acción eliminará permanentemente todos los registros de todos los dispositivos y no se puede deshacer.',
+        '¿Estás seguro de eliminar TODOS los datos? Esta acción eliminará permanentemente todos los registros de Supabase y de este dispositivo. No se puede deshacer.',
         async () => {
           try {
             const resultado = await dbService.limpiarTodosDatos()
             if (resultado.success) {
               registros.value = {}
-              localStorage.removeItem('control-balances')
               aplicarFiltros()
-              mostrarExito('Todos los datos han sido eliminados de todos los dispositivos')
+              calcularResumenMensual()
+              mostrarExito('Todos los datos han sido eliminados de Supabase y del dispositivo! 🗑️')
             } else {
-              mostrarError('Error al eliminar datos en la nube')
+              mostrarError(`Error al eliminar datos: ${resultado.error}`)
             }
           } catch (error) {
-            // Fallback local
-            registros.value = {}
-            localStorage.removeItem('control-balances')
-            aplicarFiltros()
-            mostrarExito('Datos eliminados localmente')
+            console.error('Error limpiando datos:', error)
+            mostrarError(`Error: ${error.message}`)
           }
         }
       )
@@ -1103,60 +1103,48 @@ export default {
       }
     })
 
+    // Configurar sincronización en tiempo real con Supabase
+    const setupRealtimeSync = () => {
+      if (realtimeSubscription) {
+        dbService.unsubscribe(realtimeSubscription)
+      }
+      
+      realtimeSubscription = dbService.subscribeToChanges((nuevosRegistros) => {
+        console.log('🔄 Actualizando desde otro dispositivo:', nuevosRegistros)
+        
+        // Verificar si los datos son diferentes antes de actualizar
+        if (JSON.stringify(registros.value) !== JSON.stringify(nuevosRegistros.registros)) {
+          registros.value = nuevosRegistros.registros || {}
+          ultimaActualizacion.value = nuevosRegistros.ultimaActualizacion
+          aplicarFiltros()
+          calcularResumenMensual()
+          cargarRegistroExistente()
+          
+          // Mostrar notificación
+          estadoConexion.value = 'conectado'
+          mensajeConexion.value = 'Actualizado desde otro dispositivo! 📱'
+          setTimeout(() => {
+            mensajeConexion.value = 'Sincronizado con Supabase 🌐'
+          }, 3000)
+          
+          mostrarExito('Datos actualizados desde otro dispositivo! 📱')
+        }
+      })
+    }
+
     // Lifecycle
     onMounted(async () => {
       await cargarDatos()
       inicializarFechaActual()
       cargarRegistroExistente()
       calcularResumenMensual()
-      
-      // Configurar sincronización en tiempo real entre pestañas del navegador
-      window.addEventListener('storage', (e) => {
-        if (e.key === 'control-balances-shared' && e.newValue) {
-          try {
-            const data = JSON.parse(e.newValue)
-            console.log('🔄 Datos actualizados desde otra pestaña')
-            
-            // Solo actualizar si los datos son diferentes
-            if (JSON.stringify(registros.value) !== JSON.stringify(data.registros)) {
-              registros.value = data.registros || {}
-              ultimaActualizacion.value = data.ultimaActualizacion
-              aplicarFiltros()
-              
-              estadoConexion.value = 'conectado'
-              mensajeConexion.value = 'Sincronizado entre pestañas'
-              setTimeout(() => {
-                mensajeConexion.value = 'Conectado'
-              }, 3000)
-            }
-          } catch (error) {
-            console.error('Error procesando actualización:', error)
-          }
-        }
-      })
-      
-      // Configurar listener para sincronización en tiempo real
-      dbService.escucharCambios((data) => {
-        if (!data.error) {
-          // Solo actualizar si los datos son diferentes (evitar bucles)
-          if (JSON.stringify(registros.value) !== JSON.stringify(data.registros)) {
-            registros.value = data.registros
-            ultimaActualizacion.value = data.ultimaActualizacion
-            aplicarFiltros()
-            
-            // Mostrar notificación sutil de sincronización
-            estadoConexion.value = 'conectado'
-            mensajeConexion.value = 'Datos sincronizados'
-            setTimeout(() => {
-              mensajeConexion.value = 'Conectado'
-            }, 2000)
-          }
-        }
-      })
     })
-    
+
     onUnmounted(() => {
-      dbService.detenerListeners()
+      // Limpiar suscripción en tiempo real al cerrar la app
+      if (realtimeSubscription) {
+        dbService.unsubscribe(realtimeSubscription)
+      }
     })
 
     return {

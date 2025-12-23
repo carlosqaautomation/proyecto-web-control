@@ -9,7 +9,13 @@
     "preview": "vite preview",
     "serve": "vite preview"
   },
-  "keywords": ["vue", "balances", "control", "tienda", "alquiler"],
+  "keywords": [
+    "vue",
+    "balances",
+    "control",
+    "tienda",
+    "alquiler"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
@@ -17,6 +23,7 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.89.0",
     "vue": "^3.4.0"
   }
 }
