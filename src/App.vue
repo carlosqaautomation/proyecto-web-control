@@ -38,6 +38,14 @@
         </div>
       </div>
       
+      <!-- Banner cuando no hay registro -->
+      <div v-if="!modoEdicion && !registros[fechaSeleccionada]" class="form-status-banner" style="background: #f0f9ff; border-left-color: #0ea5e9;">
+        <div class="status-message">
+          <span class="status-icon">📝</span>
+          <strong>Sin Registro</strong> - No hay datos guardados para esta fecha. Haz clic en "Nuevo Registro" para crear uno.
+        </div>
+      </div>
+      
       <!-- Selector de Fecha Mejorado -->
       <div class="date-selector-container">
         <div class="date-selector">
@@ -497,6 +505,32 @@
         </div>
       </div>
       
+      <!-- Sección de Sincronización con Supabase -->
+      <div class="form-section" style="background: #f0fdf4; border-left-color: #22c55e;">
+        <h4>☁️ Sincronización con Base de Datos</h4>
+        <p style="margin-bottom: 1rem; color: #16a34a;">Controla la sincronización entre tu dispositivo y Supabase.</p>
+        
+        <div class="sync-controls">
+          <div class="sync-option">
+            <h5>📤 Subir Datos Locales a BD</h5>
+            <p style="margin-bottom: 0.5rem;">Fuerza la subida de tus datos locales a Supabase (solo usar si sabes que los datos locales son correctos).</p>
+            <button class="btn btn-warning" @click="forzarSincronizacionLocal" :disabled="estadoConexion === 'conectando'">
+              {{ estadoConexion === 'conectando' ? '⏳ Procesando...' : '🔄 Subir Locales a BD' }}
+            </button>
+            <small style="display: block; color: #92400e; margin-top: 0.5rem;">⚠️ Esto sobrescribirá los datos en Supabase</small>
+          </div>
+          
+          <div class="sync-option">
+            <h5>🗑️ Limpiar Solo Datos Locales</h5>
+            <p style="margin-bottom: 0.5rem;">Elimina solo los datos de tu dispositivo, manteniendo Supabase intacto.</p>
+            <button class="btn btn-secondary" @click="limpiarSoloLocales">
+              🧹 Limpiar Solo Locales
+            </button>
+            <small style="display: block; color: #6b7280; margin-top: 0.5rem;">💡 Útil cuando hay conflictos de sincronización</small>
+          </div>
+        </div>
+      </div>
+      
       <!-- Sección de Limpieza -->
       <div class="form-section" style="background: #ffebee; border-left-color: #f44336;">
         <h4>🗑️ Limpieza de Datos</h4>
@@ -737,6 +771,7 @@ export default {
     const cargarRegistroExistente = () => {
       const fecha = fechaSeleccionada.value
       if (registros.value[fecha]) {
+        // Cargar datos existentes
         const reg = registros.value[fecha]
         registro.nombreTrabajador = reg.nombreTrabajador || ''
         registro.ingresos.alquiler.efectivo = reg.ingresos.alquiler.efectivo || 0
@@ -746,9 +781,20 @@ export default {
         registro.gastosExtras = reg.gastosExtras || 0
         modoEdicion.value = false // Bloquear cuando hay datos guardados
       } else {
-        limpiarFormulario()
-        modoEdicion.value = true // Permitir edición para nuevos registros
+        // Habilitar inputs automáticamente cuando no hay registro para esta fecha
+        limpiarCampos()
+        modoEdicion.value = true // Activar modo edición automáticamente
       }
+    }
+
+    const limpiarCampos = () => {
+      // Solo limpiar los campos sin cambiar el modo de edición
+      registro.nombreTrabajador = ''
+      registro.ingresos.alquiler.efectivo = 0
+      registro.ingresos.alquiler.yape = 0
+      registro.ingresos.consumo.efectivo = 0
+      registro.ingresos.consumo.yape = 0
+      registro.gastosExtras = 0
     }
 
     const guardarRegistro = () => {
@@ -780,15 +826,10 @@ export default {
     }
 
     const limpiarFormulario = () => {
-      // Limpiar todos los campos y forzar reactividad con valores numéricos
-      registro.nombreTrabajador = ''
-      registro.ingresos.alquiler.efectivo = 0
-      registro.ingresos.alquiler.yape = 0
-      registro.ingresos.consumo.efectivo = 0
-      registro.ingresos.consumo.yape = 0
-      registro.gastosExtras = 0
+      // Usar la función auxiliar para limpiar campos
+      limpiarCampos()
       
-      // Asegurar que está en modo edición
+      // Asegurar que está en modo edición (solo cuando se llama explícitamente)
       modoEdicion.value = true
       
       // Forzar actualización de la interfaz
@@ -1135,6 +1176,63 @@ export default {
       }
     }
 
+    const forzarSincronizacionLocal = async () => {
+      mostrarConfirmacion(
+        '¿Subir Datos Locales a BD?',
+        'Esto subirá TODOS tus datos locales a Supabase, sobrescribiendo cualquier dato existente en la base de datos.\n\n⚠️ Solo úsalo si estás seguro de que tus datos locales son los correctos.',
+        async () => {
+          try {
+            estadoConexion.value = 'conectando'
+            mensajeConexion.value = 'Subiendo datos locales a Supabase...'
+            
+            const resultado = await dbService.forzarSincronizacionLocal()
+            
+            if (resultado.success) {
+              estadoConexion.value = 'conectado'
+              mensajeConexion.value = 'Datos locales sincronizados a BD ☁️'
+              mostrarExito(`¡Datos locales subidos exitosamente! 🎉\n\n${resultado.message}`)
+            } else {
+              estadoConexion.value = 'error'
+              mensajeConexion.value = 'Error subiendo datos'
+              mostrarError(`Error: ${resultado.error}`)
+            }
+          } catch (error) {
+            console.error('Error forzando sincronización:', error)
+            estadoConexion.value = 'error'
+            mensajeConexion.value = 'Error de conexión'
+            mostrarError(`Error: ${error.message}`)
+          }
+        }
+      )
+    }
+
+    const limpiarSoloLocales = () => {
+      mostrarConfirmacion(
+        '¿Limpiar Solo Datos Locales?',
+        'Esto eliminará SOLO los datos de tu dispositivo, manteniendo Supabase intacto.\n\n💡 Al recargar la página, se descargarán los datos desde Supabase (si los hay).',
+        () => {
+          try {
+            localStorage.removeItem('control-balances-data')
+            localStorage.removeItem('pending-sync')
+            localStorage.removeItem('device-id')
+            localStorage.removeItem('user-id')
+            
+            // Limpiar datos en memoria
+            registros.value = {}
+            aplicarFiltros()
+            calcularResumenMensual()
+            cargarRegistroExistente()
+            
+            mostrarExito(
+              '🧹 Datos locales eliminados\n\n📱 Tu dispositivo está ahora "limpio"\n🔄 Recarga la página para descargar desde Supabase'
+            )
+          } catch (error) {
+            mostrarError(`Error limpiando datos locales: ${error.message}`)
+          }
+        }
+      )
+    }
+
     const seleccionarMesActual = () => {
       mesSeleccionado.value = new Date().toISOString().slice(0, 7)
       calcularResumenMensual()
@@ -1143,13 +1241,9 @@ export default {
     const inicializarFechaActual = () => {
       const hoy = new Date().toISOString().split('T')[0]
       fechaSeleccionada.value = hoy
-      // Si no hay registro para hoy, limpiar el formulario
-      if (!registros.value[hoy]) {
-        limpiarFormulario()
-        modoEdicion.value = true
-      } else {
-        modoEdicion.value = false
-      }
+      // Usar cargarRegistroExistente en lugar de limpiarFormulario
+      // para que maneje correctamente si hay o no registro
+      cargarRegistroExistente()
     }
 
     const habilitarEdicion = () => {
@@ -1201,8 +1295,7 @@ export default {
     // Lifecycle
     onMounted(async () => {
       await cargarDatos()
-      inicializarFechaActual()
-      cargarRegistroExistente()
+      inicializarFechaActual() // Esto ya incluye cargarRegistroExistente()
       calcularResumenMensual()
     })
 

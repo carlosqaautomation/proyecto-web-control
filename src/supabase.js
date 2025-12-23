@@ -257,19 +257,21 @@ export class SupabaseDatabaseService {
               return this.handleLoadResult(localData, true)
             }
           } else {
-            // No hay datos en Supabase, crear registro inicial
+            // No hay datos en Supabase - podría ser que se eliminaron intencionalmente
             if (localData && Object.keys(localData.registros || {}).length > 0) {
-              try {
-                await this.syncToSupabase(localData.registros, localData.ultimaActualizacion, localData.version)
-                console.log('☁️ Datos locales sincronizados a Supabase por primera vez')
-                return this.handleLoadResult(localData, true)
-              } catch (syncError) {
-                console.log('⚠️  Error sincronizando:', syncError.message)
-                return this.handleLoadResult(localData, false)
-              }
+              console.log('⚠️  No hay datos en Supabase pero sí localmente')
+              console.log('🔍 Esto puede indicar que los datos fueron eliminados de la BD')
+              console.log('💭 Opciones: 1) Los datos se eliminaron intencionalmente, 2) Es primera vez')
+              
+              // En lugar de sincronizar automáticamente, dar prioridad a la BD
+              // Si la BD está vacía, probablemente es porque se eliminó intencionalmente
+              console.log('🗑️  Respetando BD vacía - limpiando datos locales obsoletos')
+              localStorage.removeItem(getStorageKey())
+              return this.handleLoadResult(defaultConfig, true)
             } else {
               // No hay datos en ningún lado
-              return this.handleLoadResult(defaultConfig, false)
+              console.log('📝 Primera vez - no hay datos en ningún lado')
+              return this.handleLoadResult(defaultConfig, true)
             }
           }
         } catch (error) {
@@ -558,6 +560,42 @@ export class SupabaseDatabaseService {
       
     } catch (error) {
       console.error('❌ Error eliminando registro:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  // Método para forzar sincronización de datos locales a Supabase (solo cuando usuario lo decide)
+  async forzarSincronizacionLocal() {
+    try {
+      console.log('🔄 Forzando sincronización de datos locales a Supabase...')
+      
+      const localData = this.getLocalData()
+      if (!localData || Object.keys(localData.registros || {}).length === 0) {
+        return {
+          success: false,
+          error: 'No hay datos locales para sincronizar'
+        }
+      }
+      
+      // Intentar sincronizar a Supabase
+      if (this.isOnline && supabase) {
+        await this.syncToSupabase(localData.registros, localData.ultimaActualizacion, localData.version)
+        console.log('☁️ Datos locales forzados a Supabase exitosamente')
+        
+        return {
+          success: true,
+          message: `${Object.keys(localData.registros).length} registros sincronizados a Supabase`,
+          synced: true
+        }
+      } else {
+        return {
+          success: false,
+          error: 'No hay conexión con Supabase'
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ Error forzando sincronización:', error)
       return { success: false, error: error.message }
     }
   }
