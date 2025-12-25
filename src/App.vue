@@ -233,6 +233,7 @@
           <h4>Saldo Neto</h4>
           <div class="amount">S/ {{ formatearDecimal(saldoFinal) }}</div>
           <small style="opacity: 0.9;">{{ saldoFinal >= 0 ? 'Ganancia' : 'Pérdida' }} del día</small>
+           <small style="opacity: 0.8;">Efectivo: S/ {{ formatearDecimal(registro.ingresos.consumo.efectivo + registro.ingresos.alquiler.efectivo) }} | Yape: S/ {{ formatearDecimal(registro.ingresos.consumo.yape + registro.ingresos.alquiler.yape) }}</small>
         </div>
       </div>
 
@@ -403,7 +404,7 @@
           <h4>Total Ingresos</h4>
           <div class="amount">S/ {{ formatearDecimal(resumenMensual.totalIngresos) }}</div>
         </div>
-        <div class="summary-item">
+        <div class="summary-item"  style="background: #dc3545;">
           <h4>Total Gastos</h4>
           <div class="amount">S/ {{ formatearDecimal(resumenMensual.totalGastos) }}</div>
         </div>
