@@ -320,6 +320,8 @@
               <th>Trabajador</th>
               <th>Alquiler</th>
               <th>Consumo</th>
+              <th>Total Efectivo</th>
+              <th>Total Yape</th>
               <th>Total Ingresos</th>
               <th>Gastos Extra</th>
               <th>Saldo Final</th>
@@ -332,6 +334,8 @@
               <td>{{ item.nombreTrabajador || 'Sin asignar' }}</td>
               <td>S/ {{ formatearDecimal(formatearNumero(item.ingresos.alquiler.efectivo) + formatearNumero(item.ingresos.alquiler.yape)) }}</td>
               <td>S/ {{ formatearDecimal(formatearNumero(item.ingresos.consumo.efectivo) + formatearNumero(item.ingresos.consumo.yape)) }}</td>
+              <td>S/ {{ formatearDecimal(formatearNumero(item.ingresos.alquiler.efectivo) + formatearNumero(item.ingresos.consumo.efectivo)) }}</td>
+              <td>S/ {{ formatearDecimal(formatearNumero(item.ingresos.consumo.yape) + formatearNumero(item.ingresos.alquiler.yape)) }}</td>
               <td>S/ {{ formatearDecimal(calcularTotalIngresos(item)) }}</td>
               <td>S/ {{ formatearDecimal(item.gastosExtras) }}</td>
               <td class="text-success" style="font-weight: 600;">
